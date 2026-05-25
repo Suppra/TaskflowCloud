@@ -4,6 +4,8 @@ import { useRegister } from '@/hooks/useAuth';
 
 interface FormData { name: string; email: string; password: string }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function RegisterPage() {
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>();
   const registerUser = useRegister();
@@ -17,9 +19,14 @@ export default function RegisterPage() {
         <div>
           <label className="block text-sm text-slate-300 mb-1.5">Nombre completo</label>
           <input
-            {...register('name', { required: 'El nombre es requerido', minLength: { value: 2, message: 'Mínimo 2 caracteres' } })}
+            {...register('name', {
+              required: 'El nombre es requerido',
+              minLength: { value: 2, message: 'Mínimo 2 caracteres' },
+              maxLength: { value: 100, message: 'Máximo 100 caracteres' },
+            })}
             className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
             placeholder="Juan Pérez"
+            autoComplete="name"
           />
           {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name.message}</p>}
         </div>
@@ -28,9 +35,13 @@ export default function RegisterPage() {
           <label className="block text-sm text-slate-300 mb-1.5">Email</label>
           <input
             type="email"
-            {...register('email', { required: 'El email es requerido' })}
+            {...register('email', {
+              required: 'El email es requerido',
+              pattern: { value: EMAIL_PATTERN, message: 'Ingresa un email válido' },
+            })}
             className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
             placeholder="tu@email.com"
+            autoComplete="email"
           />
           {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
         </div>
@@ -39,9 +50,14 @@ export default function RegisterPage() {
           <label className="block text-sm text-slate-300 mb-1.5">Contraseña</label>
           <input
             type="password"
-            {...register('password', { required: true, minLength: { value: 8, message: 'Mínimo 8 caracteres' } })}
+            {...register('password', {
+              required: 'La contraseña es requerida',
+              minLength: { value: 8, message: 'Mínimo 8 caracteres' },
+              maxLength: { value: 128, message: 'Máximo 128 caracteres' },
+            })}
             className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
             placeholder="Mínimo 8 caracteres"
+            autoComplete="new-password"
           />
           {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
         </div>

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
@@ -5,8 +6,13 @@ import { userRepository } from '../repositories/userRepository';
 import { env } from '../config/env';
 import { User, JwtPayload } from '../types';
 import { RegisterInput, LoginInput } from '../validators/auth';
+import { sanitizeUser } from '../utils/sanitize';
 
 const SALT_ROUNDS = 12;
+
+/** Hashea el refresh token antes de guardarlo en DynamoDB (protección ante data breach) */
+const hashToken = (token: string): string =>
+  crypto.createHash('sha256').update(token).digest('hex');
 
 const signTokens = (payload: JwtPayload) => {
   const accessToken = jwt.sign(payload, env.JWT_SECRET, {
@@ -22,7 +28,7 @@ const signTokens = (payload: JwtPayload) => {
 
 export const authService = {
   async register(input: RegisterInput) {
-    const existing = await userRepository.findByEmail(input.email);
+    const existing = await userRepository.findByEmail(input.email.toLowerCase());
     if (existing) throw Object.assign(new Error('El email ya está registrado'), { statusCode: 409 });
 
     const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
@@ -45,7 +51,9 @@ export const authService = {
       role: user.role,
     });
 
-    await userRepository.update(user.userId, { refreshToken });
+    // Guardar HASH del refresh token, nunca el token en texto plano
+    await userRepository.update(user.userId, { refreshToken: hashToken(refreshToken) });
+
     return { accessToken, refreshToken, user: sanitizeUser(user) };
   },
 
@@ -62,7 +70,11 @@ export const authService = {
       role: user.role,
     });
 
-    await userRepository.update(user.userId, { refreshToken, updatedAt: new Date().toISOString() });
+    await userRepository.update(user.userId, {
+      refreshToken: hashToken(refreshToken),
+      updatedAt: new Date().toISOString(),
+    });
+
     return { accessToken, refreshToken, user: sanitizeUser(user) };
   },
 
@@ -75,7 +87,8 @@ export const authService = {
     }
 
     const user = await userRepository.findById(payload.userId);
-    if (!user || user.refreshToken !== token) {
+    // Comparar el hash del token recibido con el hash almacenado
+    if (!user || user.refreshToken !== hashToken(token)) {
       throw Object.assign(new Error('Refresh token revocado'), { statusCode: 401 });
     }
 
@@ -85,18 +98,11 @@ export const authService = {
       role: user.role,
     });
 
-    await userRepository.update(user.userId, { refreshToken });
+    await userRepository.update(user.userId, { refreshToken: hashToken(refreshToken) });
     return { accessToken, refreshToken };
   },
 
   async logout(userId: string) {
     await userRepository.update(userId, { refreshToken: undefined });
   },
-};
-
-const sanitizeUser = (user: User) => {
-  const { passwordHash, refreshToken, ...safe } = user;
-  void passwordHash;
-  void refreshToken;
-  return safe;
 };

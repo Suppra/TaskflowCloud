@@ -1,4 +1,11 @@
-import { PutCommand, GetCommand, QueryCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  PutCommand,
+  GetCommand,
+  QueryCommand,
+  UpdateCommand,
+  DeleteCommand,
+  ScanCommand,
+} from '@aws-sdk/lib-dynamodb';
 import { dynamoDB } from '../config/aws';
 import { Task } from '../types';
 
@@ -18,48 +25,75 @@ export const taskRepository = {
   },
 
   async findByBoard(boardId: string): Promise<Task[]> {
-    const result = await dynamoDB.send(
-      new QueryCommand({
-        TableName: TABLE,
-        IndexName: 'boardId-index',
-        KeyConditionExpression: 'boardId = :boardId',
-        ExpressionAttributeValues: { ':boardId': boardId },
-      })
-    );
-    return (result.Items ?? []) as Task[];
+    const items: Task[] = [];
+    let lastKey: Record<string, unknown> | undefined;
+    do {
+      const result = await dynamoDB.send(
+        new QueryCommand({
+          TableName: TABLE,
+          IndexName: 'boardId-index',
+          KeyConditionExpression: 'boardId = :boardId',
+          ExpressionAttributeValues: { ':boardId': boardId },
+          ExclusiveStartKey: lastKey,
+        })
+      );
+      items.push(...((result.Items ?? []) as Task[]));
+      lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastKey);
+    return items;
   },
 
   async findByProject(projectId: string): Promise<Task[]> {
-    const result = await dynamoDB.send(
-      new QueryCommand({
-        TableName: TABLE,
-        IndexName: 'projectId-index',
-        KeyConditionExpression: 'projectId = :projectId',
-        ExpressionAttributeValues: { ':projectId': projectId },
-      })
-    );
-    return (result.Items ?? []) as Task[];
+    const items: Task[] = [];
+    let lastKey: Record<string, unknown> | undefined;
+    do {
+      const result = await dynamoDB.send(
+        new QueryCommand({
+          TableName: TABLE,
+          IndexName: 'projectId-index',
+          KeyConditionExpression: 'projectId = :projectId',
+          ExpressionAttributeValues: { ':projectId': projectId },
+          ExclusiveStartKey: lastKey,
+        })
+      );
+      items.push(...((result.Items ?? []) as Task[]));
+      lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastKey);
+    return items;
   },
 
+  /**
+   * Tareas abiertas vencidas que aún no fueron notificadas.
+   * Usa ScanCommand porque DynamoDB no soporta range queries sobre partition keys.
+   * TODO de escala: GSI con PK fija ('OPEN') + SK=dueDate para evitar full scan.
+   */
   async findOverdue(): Promise<Task[]> {
     const now = new Date().toISOString();
-    const result = await dynamoDB.send(
-      new QueryCommand({
-        TableName: TABLE,
-        IndexName: 'dueDate-index',
-        KeyConditionExpression: 'dueDate < :now',
-        FilterExpression: 'completedAt = :null',
-        ExpressionAttributeValues: { ':now': now, ':null': null },
-      })
-    );
-    return (result.Items ?? []) as Task[];
+    const items: Task[] = [];
+    let lastKey: Record<string, unknown> | undefined;
+    do {
+      const result = await dynamoDB.send(
+        new ScanCommand({
+          TableName: TABLE,
+          FilterExpression:
+            'dueDate < :now ' +
+            'AND attribute_not_exists(completedAt) ' +
+            'AND attribute_not_exists(overdueNotifiedAt)',
+          ExpressionAttributeValues: { ':now': now },
+          ExclusiveStartKey: lastKey,
+        })
+      );
+      items.push(...((result.Items ?? []) as Task[]));
+      lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastKey);
+    return items;
   },
 
   async update(taskId: string, updates: Partial<Task>): Promise<Task | null> {
     const entries = Object.entries(updates).filter(([k]) => k !== 'taskId');
     if (entries.length === 0) return this.findById(taskId);
 
-    const updateExp = 'SET ' + entries.map(([k], i) => `#k${i} = :v${i}`).join(', ');
+    const updateExp = 'SET ' + entries.map((_, i) => `#k${i} = :v${i}`).join(', ');
     const nameMap: Record<string, string> = {};
     const valueMap: Record<string, unknown> = {};
     entries.forEach(([k, v], i) => {
@@ -77,7 +111,7 @@ export const taskRepository = {
         ReturnValues: 'ALL_NEW',
       })
     );
-    return result.Attributes as Task ?? null;
+    return (result.Attributes as Task) ?? null;
   },
 
   async delete(taskId: string): Promise<void> {

@@ -1,12 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { boardRepository } from '../repositories/boardRepository';
+import { taskRepository } from '../repositories/taskRepository';
 import { Board, Column } from '../types';
 
 const DEFAULT_COLUMNS: Omit<Column, 'columnId'>[] = [
-  { name: 'Por hacer', order: 0, color: '#6B7280' },
+  { name: 'Por hacer',   order: 0, color: '#6B7280' },
   { name: 'En progreso', order: 1, color: '#3B82F6' },
   { name: 'En revisión', order: 2, color: '#F59E0B' },
-  { name: 'Completado', order: 3, color: '#10B981' },
+  { name: 'Completado',  order: 3, color: '#10B981' },
 ];
 
 export const boardService = {
@@ -50,19 +51,61 @@ export const boardService = {
 
   async updateColumn(boardId: string, columnId: string, updates: Partial<Column>): Promise<Board> {
     const board = await this.findById(boardId);
+    if (!board.columns.some(c => c.columnId === columnId)) {
+      throw Object.assign(new Error('Columna no encontrada'), { statusCode: 404 });
+    }
     const columns = board.columns.map(c =>
       c.columnId === columnId ? { ...c, ...updates } : c
     );
-    const updated = await boardRepository.update(boardId, { columns, updatedAt: new Date().toISOString() });
+    const updated = await boardRepository.update(boardId, {
+      columns,
+      updatedAt: new Date().toISOString(),
+    });
     return updated!;
   },
 
+  /**
+   * Elimina una columna y mueve todas sus tareas a la primera columna restante.
+   * Previene pérdida silenciosa de datos (tareas huérfanas).
+   */
   async deleteColumn(boardId: string, columnId: string): Promise<Board> {
     const board = await this.findById(boardId);
-    const columns = board.columns
+
+    if (!board.columns.some(c => c.columnId === columnId)) {
+      throw Object.assign(new Error('Columna no encontrada'), { statusCode: 404 });
+    }
+
+    const remainingColumns = board.columns
       .filter(c => c.columnId !== columnId)
-      .map((c, i) => ({ ...c, order: i }));
-    const updated = await boardRepository.update(boardId, { columns, updatedAt: new Date().toISOString() });
+      .sort((a, b) => a.order - b.order);
+
+    if (remainingColumns.length === 0) {
+      throw Object.assign(new Error('No se puede eliminar la única columna del tablero'), { statusCode: 400 });
+    }
+
+    // Mover tareas huérfanas a la primera columna restante
+    const targetColumn = remainingColumns[0];
+    const allTasks = await taskRepository.findByBoard(boardId);
+    const orphanTasks = allTasks.filter(t => t.columnId === columnId);
+
+    if (orphanTasks.length > 0) {
+      const now = new Date().toISOString();
+      await Promise.all(
+        orphanTasks.map(t =>
+          taskRepository.update(t.taskId, {
+            columnId: targetColumn.columnId,
+            status: targetColumn.columnId,
+            updatedAt: now,
+          })
+        )
+      );
+    }
+
+    const updatedColumns = remainingColumns.map((c, i) => ({ ...c, order: i }));
+    const updated = await boardRepository.update(boardId, {
+      columns: updatedColumns,
+      updatedAt: new Date().toISOString(),
+    });
     return updated!;
   },
 

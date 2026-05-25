@@ -4,6 +4,8 @@ import { useLogin } from '@/hooks/useAuth';
 
 interface FormData { email: string; password: string }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function LoginPage() {
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>();
   const login = useLogin();
@@ -18,9 +20,13 @@ export default function LoginPage() {
           <label className="block text-sm text-slate-300 mb-1.5">Email</label>
           <input
             type="email"
-            {...register('email', { required: 'El email es requerido' })}
+            {...register('email', {
+              required: 'El email es requerido',
+              pattern: { value: EMAIL_PATTERN, message: 'Ingresa un email válido' },
+            })}
             className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
             placeholder="tu@email.com"
+            autoComplete="email"
           />
           {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
         </div>
@@ -32,6 +38,7 @@ export default function LoginPage() {
             {...register('password', { required: 'La contraseña es requerida' })}
             className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
             placeholder="••••••••"
+            autoComplete="current-password"
           />
           {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
         </div>

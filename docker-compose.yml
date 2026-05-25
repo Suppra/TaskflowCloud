@@ -1,34 +1,33 @@
 version: '3.9'
 
+# Los secrets JWT se leen del archivo ./backend/.env (no versionado).
+# Copia backend/.env.example a backend/.env y rellena los valores antes de ejecutar.
+
 services:
   # ── Backend ─────────────────────────────────────────────
   backend:
     build:
       context: ./backend
-      target: builder        # usa stage de build (con ts-node) en dev
+      target: builder        # stage con devDependencies para desarrollo
     container_name: taskflow-backend
     restart: unless-stopped
     ports:
       - "3001:3001"
+    env_file:
+      - ./backend/.env       # contiene JWT_SECRET, JWT_REFRESH_SECRET y demás vars
     environment:
+      # Sobreescribimos solo lo que cambia en el contexto docker
       NODE_ENV: development
       PORT: 3001
-      JWT_SECRET: taskflow-super-secret-key-dev-32chars!
-      JWT_REFRESH_SECRET: taskflow-refresh-super-secret-32!!
-      JWT_EXPIRES_IN: 15m
-      JWT_REFRESH_EXPIRES_IN: 7d
-      AWS_REGION: us-east-1
       DYNAMODB_ENDPOINT: http://dynamodb-local:8000
-      S3_BUCKET_ATTACHMENTS: taskflow-attachments-dev
-      S3_BUCKET_REPORTS: taskflow-reports-dev
       CORS_ORIGINS: http://localhost:5173
       FRONTEND_URL: http://localhost:5173
-      SES_FROM_EMAIL: noreply@taskflow.dev
     command: npx ts-node src/app.ts
     volumes:
       - ./backend/src:/app/src:ro
     depends_on:
-      - dynamodb-local
+      dynamodb-local:
+        condition: service_healthy
     networks:
       - taskflow-net
 
@@ -40,6 +39,12 @@ services:
     ports:
       - "8000:8000"
     command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     networks:
       - taskflow-net
 
@@ -56,7 +61,8 @@ services:
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
     depends_on:
-      - dynamodb-local
+      dynamodb-local:
+        condition: service_healthy
     networks:
       - taskflow-net
 

@@ -18,22 +18,29 @@ export const boardRepository = {
   },
 
   async findByProject(projectId: string): Promise<Board[]> {
-    const result = await dynamoDB.send(
-      new QueryCommand({
-        TableName: TABLE,
-        IndexName: 'projectId-index',
-        KeyConditionExpression: 'projectId = :projectId',
-        ExpressionAttributeValues: { ':projectId': projectId },
-      })
-    );
-    return (result.Items ?? []) as Board[];
+    const items: Board[] = [];
+    let lastKey: Record<string, unknown> | undefined;
+    do {
+      const result = await dynamoDB.send(
+        new QueryCommand({
+          TableName: TABLE,
+          IndexName: 'projectId-index',
+          KeyConditionExpression: 'projectId = :projectId',
+          ExpressionAttributeValues: { ':projectId': projectId },
+          ExclusiveStartKey: lastKey,
+        })
+      );
+      items.push(...((result.Items ?? []) as Board[]));
+      lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastKey);
+    return items;
   },
 
   async update(boardId: string, updates: Partial<Board>): Promise<Board | null> {
     const entries = Object.entries(updates).filter(([k]) => k !== 'boardId');
     if (entries.length === 0) return this.findById(boardId);
 
-    const updateExp = 'SET ' + entries.map(([k], i) => `#k${i} = :v${i}`).join(', ');
+    const updateExp = 'SET ' + entries.map((_, i) => `#k${i} = :v${i}`).join(', ');
     const nameMap: Record<string, string> = {};
     const valueMap: Record<string, unknown> = {};
     entries.forEach(([k, v], i) => {
@@ -51,7 +58,7 @@ export const boardRepository = {
         ReturnValues: 'ALL_NEW',
       })
     );
-    return result.Attributes as Board ?? null;
+    return (result.Attributes as Board) ?? null;
   },
 
   async delete(boardId: string): Promise<void> {

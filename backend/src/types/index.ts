@@ -7,7 +7,7 @@ export interface User {
   avatar?: string;
   createdAt: string;
   updatedAt: string;
-  refreshToken?: string;
+  refreshToken?: string; // almacenado como hash SHA-256
 }
 
 export interface Project {
@@ -16,6 +16,8 @@ export interface Project {
   description?: string;
   ownerId: string;
   members: ProjectMember[];
+  /** Desnormalizado: lista de userIds de todos los miembros para filtros eficientes */
+  memberUserIds: string[];
   status: 'active' | 'archived';
   createdAt: string;
   updatedAt: string;
@@ -51,6 +53,7 @@ export interface Task {
   title: string;
   description?: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
+  /** Siempre sincronizado con columnId */
   status: string;
   assigneeId?: string;
   reporterId: string;
@@ -62,6 +65,7 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  overdueNotifiedAt?: string;
 }
 
 export interface Subtask {

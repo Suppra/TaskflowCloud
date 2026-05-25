@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/utils/cn';
@@ -7,9 +8,9 @@ import { useUIStore } from '@/store/uiStore';
 import type { Task } from '@/types';
 
 const PRIORITY_STYLES = {
-  low: 'bg-slate-700 text-slate-300',
-  medium: 'bg-blue-900/60 text-blue-300',
-  high: 'bg-orange-900/60 text-orange-300',
+  low:      'bg-slate-700 text-slate-300',
+  medium:   'bg-blue-900/60 text-blue-300',
+  high:     'bg-orange-900/60 text-orange-300',
   critical: 'bg-red-900/60 text-red-300',
 };
 
@@ -23,18 +24,42 @@ interface Props {
 }
 
 export function TaskCard({ task, isDragging = false }: Props) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSorting } = useSortable({
-    id: task.taskId,
-  });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging: isSorting,
+  } = useSortable({ id: task.taskId });
+
   const { openModal } = useUIStore();
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  // Detectar si el usuario está arrastrando o haciendo click real
+  const dragStartPos = useRef<{ x: number; y: number } | null>(null);
+  const wasDragged = useRef(false);
 
+  const style = { transform: CSS.Transform.toString(transform), transition };
   const overdue = isOverdue(task.dueDate);
   const completedSubtasks = task.subtasks.filter(s => s.completed).length;
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    wasDragged.current = false;
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragStartPos.current) return;
+    const dx = Math.abs(e.clientX - dragStartPos.current.x);
+    const dy = Math.abs(e.clientY - dragStartPos.current.y);
+    if (dx > 5 || dy > 5) wasDragged.current = true;
+  };
+
+  const handleClick = () => {
+    // No abrir el modal si el gesto fue un drag
+    if (wasDragged.current || isSorting || isDragging) return;
+    openModal('task-detail', task.taskId);
+  };
 
   return (
     <div
@@ -42,9 +67,12 @@ export function TaskCard({ task, isDragging = false }: Props) {
       style={style}
       {...attributes}
       {...listeners}
-      onClick={() => openModal('task-detail', task.taskId)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onClick={handleClick}
       className={cn(
-        'bg-slate-800 border border-slate-700 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-slate-600 transition-all',
+        'bg-slate-800 border border-slate-700 rounded-lg p-3 cursor-grab active:cursor-grabbing',
+        'hover:border-slate-600 transition-all select-none',
         (isDragging || isSorting) && 'opacity-40 ring-1 ring-blue-500'
       )}
     >

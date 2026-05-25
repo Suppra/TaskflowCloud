@@ -1,11 +1,28 @@
 import { Response } from 'express';
 import { taskService } from '../services/taskService';
+import { commentService } from '../services/commentService';
+import { projectService } from '../services/projectService';
 import { AuthRequest } from '../middleware/auth';
 import { createTaskSchema, updateTaskSchema, addCommentSchema, addSubtaskSchema } from '../validators/task';
 import { sendSuccess, sendCreated } from '../utils/response';
+import { asyncHandler } from '../utils/asyncHandler';
+import { z } from 'zod';
+import { uploadService } from '../services/uploadService';
+
+// Tipos MIME permitidos para adjuntos (allowlist estricta)
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain', 'text/csv',
+];
 
 export const taskController = {
-  async create(req: AuthRequest, res: Response) {
+  create: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
     const input = createTaskSchema.parse(req.body);
     const task = await taskService.create(
       req.params.boardId,
@@ -14,50 +31,71 @@ export const taskController = {
       req.user!.userId
     );
     return sendCreated(res, task, 'Tarea creada');
-  },
+  }),
 
-  async listByBoard(req: AuthRequest, res: Response) {
+  listByBoard: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
     const tasks = await taskService.findByBoard(req.params.boardId);
     return sendSuccess(res, tasks);
-  },
+  }),
 
-  async getById(req: AuthRequest, res: Response) {
+  getById: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
     const task = await taskService.findById(req.params.taskId);
     return sendSuccess(res, task);
-  },
+  }),
 
-  async update(req: AuthRequest, res: Response) {
+  update: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
     const input = updateTaskSchema.parse(req.body);
     const task = await taskService.update(req.params.taskId, input, req.user!.userId);
     return sendSuccess(res, task, 'Tarea actualizada');
-  },
+  }),
 
-  async delete(req: AuthRequest, res: Response) {
+  delete: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
     await taskService.delete(req.params.taskId);
     return sendSuccess(res, null, 'Tarea eliminada');
-  },
+  }),
 
-  async addSubtask(req: AuthRequest, res: Response) {
+  addSubtask: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
     const { title } = addSubtaskSchema.parse(req.body);
     const task = await taskService.addSubtask(req.params.taskId, title);
     return sendSuccess(res, task, 'Subtarea agregada');
-  },
+  }),
 
-  async toggleSubtask(req: AuthRequest, res: Response) {
+  toggleSubtask: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
     const task = await taskService.toggleSubtask(req.params.taskId, req.params.subtaskId);
     return sendSuccess(res, task);
-  },
+  }),
 
-  async addComment(req: AuthRequest, res: Response) {
+  addComment: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
     const { content } = addCommentSchema.parse(req.body);
-    const { commentService } = await import('../services/commentService');
     const comment = await commentService.create(req.params.taskId, req.user!.userId, content);
     return sendCreated(res, comment, 'Comentario agregado');
-  },
+  }),
 
-  async getComments(req: AuthRequest, res: Response) {
-    const { commentService } = await import('../services/commentService');
+  getComments: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
     const comments = await commentService.findByTask(req.params.taskId);
     return sendSuccess(res, comments);
-  },
+  }),
+
+  getPresignedUrl: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
+
+    const { filename, mimeType } = z.object({
+      filename: z.string().min(1).max(255),
+      mimeType: z.string().refine(
+        v => ALLOWED_MIME_TYPES.includes(v),
+        { message: `Tipo de archivo no permitido. Permitidos: ${ALLOWED_MIME_TYPES.join(', ')}` }
+      ),
+    }).parse(req.body);
+
+    const result = await uploadService.getPresignedUploadUrl(filename, mimeType, req.params.taskId);
+    return sendSuccess(res, result);
+  }),
 };

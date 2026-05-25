@@ -1,10 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
-import { PutCommand, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
-import { dynamoDB } from '../config/aws';
+import { commentRepository } from '../repositories/commentRepository';
 import { Comment } from '../types';
 import { eventPublisher } from '../events/eventPublisher';
-
-const TABLE = 'taskflow-comments';
 
 export const commentService = {
   async create(taskId: string, authorId: string, content: string): Promise<Comment> {
@@ -17,7 +14,8 @@ export const commentService = {
       createdAt: now,
       updatedAt: now,
     };
-    await dynamoDB.send(new PutCommand({ TableName: TABLE, Item: comment }));
+
+    await commentRepository.create(comment);
 
     await eventPublisher.publish({
       type: 'COMMENT_CREATED',
@@ -29,18 +27,15 @@ export const commentService = {
   },
 
   async findByTask(taskId: string): Promise<Comment[]> {
-    const result = await dynamoDB.send(
-      new QueryCommand({
-        TableName: TABLE,
-        IndexName: 'taskId-index',
-        KeyConditionExpression: 'taskId = :taskId',
-        ExpressionAttributeValues: { ':taskId': taskId },
-      })
-    );
-    return (result.Items ?? []) as Comment[];
+    return commentRepository.findByTask(taskId);
   },
 
-  async delete(commentId: string): Promise<void> {
-    await dynamoDB.send(new DeleteCommand({ TableName: TABLE, Key: { commentId } }));
+  async delete(commentId: string, requesterId: string): Promise<void> {
+    const comment = await commentRepository.findById(commentId);
+    if (!comment) throw Object.assign(new Error('Comentario no encontrado'), { statusCode: 404 });
+    if (comment.authorId !== requesterId) {
+      throw Object.assign(new Error('Solo el autor puede eliminar el comentario'), { statusCode: 403 });
+    }
+    await commentRepository.delete(commentId);
   },
 };
