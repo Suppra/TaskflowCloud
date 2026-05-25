@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import authRouter from './auth';
 import projectRouter from './projects';
+import metricsRouter from './metrics';
 
 const router = Router();
 
@@ -10,5 +11,6 @@ router.get('/health', (_req, res) => {
 
 router.use('/auth', authRouter);
 router.use('/projects', projectRouter);
+router.use('/metrics', metricsRouter);
 
 export default router;
