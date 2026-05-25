@@ -1,0 +1,18 @@
+import winston from 'winston';
+import { env } from './env';
+
+const { combine, timestamp, errors, json, colorize, simple } = winston.format;
+
+export const logger = winston.createLogger({
+  level: env.NODE_ENV === 'production' ? 'info' : 'debug',
+  format: combine(timestamp(), errors({ stack: true }), json()),
+  defaultMeta: { service: 'taskflow-backend' },
+  transports: [
+    new winston.transports.Console({
+      format:
+        env.NODE_ENV === 'production'
+          ? combine(timestamp(), json())
+          : combine(colorize(), simple()),
+    }),
+  ],
+});

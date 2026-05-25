@@ -1,0 +1,65 @@
+version: '3.9'
+
+services:
+  # ── Backend ─────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      target: builder        # usa stage de build (con ts-node) en dev
+    container_name: taskflow-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      JWT_SECRET: taskflow-super-secret-key-dev-32chars!
+      JWT_REFRESH_SECRET: taskflow-refresh-super-secret-32!!
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      AWS_REGION: us-east-1
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+      S3_BUCKET_ATTACHMENTS: taskflow-attachments-dev
+      S3_BUCKET_REPORTS: taskflow-reports-dev
+      CORS_ORIGINS: http://localhost:5173
+      FRONTEND_URL: http://localhost:5173
+      SES_FROM_EMAIL: noreply@taskflow.dev
+    command: npx ts-node src/app.ts
+    volumes:
+      - ./backend/src:/app/src:ro
+    depends_on:
+      - dynamodb-local
+    networks:
+      - taskflow-net
+
+  # ── DynamoDB Local ───────────────────────────────────────
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: taskflow-dynamodb
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    networks:
+      - taskflow-net
+
+  # ── DynamoDB Admin UI ────────────────────────────────────
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin:latest
+    container_name: taskflow-dynamo-admin
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      DYNAMO_ENDPOINT: http://dynamodb-local:8000
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    depends_on:
+      - dynamodb-local
+    networks:
+      - taskflow-net
+
+networks:
+  taskflow-net:
+    driver: bridge
