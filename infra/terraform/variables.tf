@@ -108,8 +108,8 @@ variable "log_retention_days" {
   default     = 30
 }
 
-variable "gemini_api_key" {
-  description = "API Key de Google Gemini para la feature de generación de tareas con IA. Completamente gratis en https://ai.google.dev. Dejar vacío para deshabilitar la feature."
+variable "groq_api_key" {
+  description = "API Key de Groq para la feature de generación de tareas con IA (LLaMA 3.3 70B). Completamente gratis en https://console.groq.com. Dejar vacío para deshabilitar la feature."
   type        = string
   default     = ""
   sensitive   = true

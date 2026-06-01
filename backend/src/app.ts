@@ -106,10 +106,10 @@ httpServer.listen(PORT, () => {
   logger.info(`TaskFlow Backend corriendo en http://localhost:${PORT}`);
   logger.info(`  Entorno: ${env.NODE_ENV}`);
   logger.info(`  WebSockets: habilitados`);
-  if (env.GEMINI_API_KEY) {
-    logger.info(`  IA (Google Gemini): habilitada`);
+  if (env.GROQ_API_KEY) {
+    logger.info(`  IA (Groq / LLaMA 3.3): habilitada`);
   } else {
-    logger.info(`  IA (Google Gemini): deshabilitada — configura GEMINI_API_KEY para activar (gratis en ai.google.dev)`);
+    logger.info(`  IA (Groq / LLaMA 3.3): deshabilitada — configura GROQ_API_KEY para activar (gratis en console.groq.com)`);
   }
 });
 

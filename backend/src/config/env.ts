@@ -28,9 +28,10 @@ const envSchema = z.object({
   // Si todos están en el tope, igualmente se asigna al de menor carga.
   MAX_TASKS_PER_MEMBER: z.coerce.number().int().positive().default(8),
 
-  // Google Gemini — opcional en dev (la feature de IA queda desactivada si no está)
-  // Obtén tu clave gratis en https://ai.google.dev (sin tarjeta de crédito)
-  GEMINI_API_KEY: z.string().optional(),
+  // Groq — completamente gratis, sin tarjeta de crédito
+  // Obtén tu clave en https://console.groq.com → "Create API Key"
+  // Las claves empiezan con gsk_...
+  GROQ_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

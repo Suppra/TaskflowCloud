@@ -150,7 +150,7 @@ export function AiTaskGenerator({
                 Generar tareas con IA
               </h2>
               <p className="text-[10px]" style={{ color: '#52525B' }}>
-                Powered by Claude (Anthropic)
+                Powered by LLaMA 3.3 · Groq
               </p>
             </div>
           </div>

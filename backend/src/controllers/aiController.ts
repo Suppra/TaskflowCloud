@@ -1,18 +1,17 @@
 /**
- * aiController — Generación de tareas con Google Gemini (completamente gratis)
+ * aiController — Generación de tareas con Groq + LLaMA 3.3 70B (completamente gratis)
  *
- * Modelo : gemini-1.5-flash
- * Clave  : https://ai.google.dev  (sin tarjeta de crédito)
- * Límite : 15 req/min · 1 millón de tokens/día — más que suficiente para demo
+ * Modelo  : llama-3.3-70b-versatile (Meta, open source, hosteado por Groq)
+ * Clave   : https://console.groq.com → "Create API Key"  (sin tarjeta)
+ * Formato : gsk_...
+ * Límite  : 30 req/min · 6K tokens/min · gratis para siempre
  *
  * Endpoint : POST /api/v1/ai/suggest-tasks
  * Body     : { projectName: string, description?: string, count?: number }
  * Returns  : { tasks: AiTaskSuggestion[], model: string, count: number }
- *
- * Si GEMINI_API_KEY no está configurada, retorna 503 con mensaje descriptivo.
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { z } from 'zod';
 import type { Response } from 'express';
 import { env } from '../config/env';
@@ -33,71 +32,65 @@ const suggestSchema = z.object({
   count:        z.coerce.number().int().min(3).max(15).default(8),
 });
 
-/* ── Prompt ──────────────────────────────────────────────────────────────────── */
 function buildPrompt(projectName: string, description: string | undefined, count: number): string {
-  return `Eres un experto en gestión de proyectos ágiles. Tu tarea es generar tareas Kanban específicas y accionables.
+  return `Eres un experto en gestión de proyectos ágiles. Genera exactamente ${count} tareas Kanban específicas y accionables.
 
 Proyecto: "${projectName}"
-${description ? `Contexto adicional: "${description}"` : ''}
+${description ? `Contexto: "${description}"` : ''}
 
-Genera exactamente ${count} tareas Kanban que:
-- Cubran las principales áreas del proyecto de forma balanceada
-- Sean concretas y ejecutables (no vagas ni genéricas)
-- Empiecen con un verbo de acción en infinitivo (Crear, Implementar, Diseñar, Configurar, Definir, Integrar, etc.)
-- Tengan prioridades variadas y realistas según su importancia para el proyecto
-- Incluyan 1-2 etiquetas cortas descriptivas en español (una sola palabra por etiqueta)
+Reglas:
+- Cada tarea empieza con un verbo en infinitivo (Crear, Implementar, Diseñar, Configurar, etc.)
+- Prioridades variadas y realistas según importancia
+- 1-2 etiquetas cortas en español (una sola palabra)
+- Títulos concretos, no vagos
 
-Responde ÚNICAMENTE con un array JSON válido. Sin texto extra, sin explicaciones, sin bloques de código markdown:
+Responde SOLO con un array JSON válido, sin texto adicional:
 
 [
   {
-    "title": "Título de la tarea (máximo 80 caracteres)",
-    "description": "Descripción breve opcional (máximo 120 caracteres)",
-    "priority": "low",
-    "labels": ["etiqueta"]
+    "title": "Título (máx 80 caracteres)",
+    "description": "Descripción breve opcional (máx 120 caracteres)",
+    "priority": "low|medium|high|critical",
+    "labels": ["etiqueta1"]
   }
-]
-
-Prioridades disponibles: "low", "medium", "high", "critical"`;
+]`;
 }
 
-/* ── Controlador ─────────────────────────────────────────────────────────────── */
 export const aiController = {
   suggestTasks: asyncHandler(async (req: AuthRequest, res: Response) => {
-    if (!env.GEMINI_API_KEY) {
+    if (!env.GROQ_API_KEY) {
       return sendError(
         res,
-        'La funcionalidad de IA no está habilitada. Configura GEMINI_API_KEY. Obtén una clave gratis en https://ai.google.dev',
+        'La funcionalidad de IA no está habilitada. Configura GROQ_API_KEY. Obtén una clave gratis en https://console.groq.com',
         503
       );
     }
 
     const { projectName, description, count } = suggestSchema.parse(req.body);
 
-    const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        temperature:     0.7,  // algo de creatividad pero predecible
-        maxOutputTokens: 2048,
-        // Forzar respuesta en JSON puro
-        responseMimeType: 'application/json',
-      },
+    const groq = new Groq({ apiKey: env.GROQ_API_KEY });
+
+    const completion = await groq.chat.completions.create({
+      model:       'llama-3.3-70b-versatile',
+      temperature: 0.7,
+      max_tokens:  2048,
+      messages: [
+        {
+          role:    'user',
+          content: buildPrompt(projectName, description, count),
+        },
+      ],
     });
 
-    const result = await model.generateContent(buildPrompt(projectName, description, count));
-    const rawText = result.response.text();
+    const rawText = completion.choices[0]?.message?.content ?? '';
 
     let tasks: AiTaskSuggestion[];
     try {
-      // Con responseMimeType: 'application/json' Gemini devuelve JSON limpio,
-      // pero por robustez también manejamos el caso con markdown fences
       const jsonMatch = rawText.match(/\[[\s\S]*\]/);
       if (!jsonMatch) throw new Error('No se encontró JSON en la respuesta');
 
       tasks = JSON.parse(jsonMatch[0]) as AiTaskSuggestion[];
 
-      // Normalizar y validar cada tarea
       const validPriorities = ['low', 'medium', 'high', 'critical'] as const;
       tasks = tasks
         .filter(t => t.title && typeof t.title === 'string')
@@ -117,7 +110,7 @@ export const aiController = {
 
     return sendSuccess(res, {
       tasks,
-      model: 'gemini-1.5-flash',
+      model: 'llama-3.3-70b-versatile',
       count: tasks.length,
     });
   }),
