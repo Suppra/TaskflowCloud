@@ -19,9 +19,18 @@ import { useAuthStore } from '@/store/authStore';
 // Singleton global — una sola conexión para toda la app
 let _socket: Socket | null = null;
 
+/**
+ * En desarrollo (Vite en :5173) el backend corre en :3001.
+ * En producción (mismo dominio) usamos window.location.origin.
+ * La variable VITE_SOCKET_URL permite sobreescribir desde el .env del frontend.
+ */
+const SOCKET_URL: string =
+  (import.meta.env.VITE_SOCKET_URL as string | undefined) ??
+  (import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin);
+
 function getSocket(token: string): Socket {
   if (!_socket || !_socket.connected) {
-    _socket = io(window.location.origin, {
+    _socket = io(SOCKET_URL, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,

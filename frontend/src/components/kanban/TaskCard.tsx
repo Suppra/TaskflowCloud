@@ -40,7 +40,7 @@ export function TaskCard({ task, members = [], isDragging = false }: Props) {
 
   const { openModal } = useUIStore();
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
-  const wasDragged = useRef(false);
+  const wasDragged   = useRef(false);
   const [hovered, setHovered] = useState(false);
 
   const ghost = isDragging || isSorting;
@@ -48,15 +48,27 @@ export function TaskCard({ task, members = [], isDragging = false }: Props) {
   const completedSubtasks = task.subtasks.filter(s => s.completed).length;
   const priorityBorderColor = PRIORITY_BORDER[task.priority] ?? '#27272A';
 
+  /**
+   * IMPORTANTE: no sobreescribir listeners.onPointerDown — eso rompe dnd-kit.
+   * En cambio, envolvemos el handler de dnd-kit para ejecutar AMBOS:
+   * 1. nuestro tracking de posición (para distinguir click de drag)
+   * 2. el listener original de dnd-kit (para iniciar el drag)
+   */
   const handlePointerDown = (e: React.PointerEvent) => {
     dragStartPos.current = { x: e.clientX, y: e.clientY };
     wasDragged.current = false;
+    // Delegar a dnd-kit para que pueda iniciar el drag
+    listeners?.onPointerDown?.(e as unknown as PointerEvent);
   };
+
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!dragStartPos.current) return;
     if (Math.abs(e.clientX - dragStartPos.current.x) > 5 ||
-        Math.abs(e.clientY - dragStartPos.current.y) > 5) wasDragged.current = true;
+        Math.abs(e.clientY - dragStartPos.current.y) > 5) {
+      wasDragged.current = true;
+    }
   };
+
   const handleClick = () => {
     if (wasDragged.current || isSorting || isDragging) return;
     openModal('task-detail', task.taskId);
@@ -66,7 +78,8 @@ export function TaskCard({ task, members = [], isDragging = false }: Props) {
     <div
       ref={setNodeRef}
       {...attributes}
-      {...listeners}
+      // NO usar {...listeners} aquí — lo llamamos dentro de handlePointerDown
+      // para evitar que nuestro onPointerDown lo sobreescriba y rompa el drag.
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onClick={handleClick}
