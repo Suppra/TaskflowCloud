@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   closestCorners, type DragEndEvent, type DragStartEvent,
@@ -7,16 +7,21 @@ import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortabl
 import { useTasks, useUpdateTask } from '@/hooks/useTasks';
 import { useMembers } from '@/hooks/useProjects';
 import { useUIStore } from '@/store/uiStore';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSocket } from '@/hooks/useSocket';
 import { KanbanColumn } from './KanbanColumn';
 import { TaskCard } from './TaskCard';
 import { TaskDetailModal } from './TaskDetailModal';
+import { AiTaskGenerator } from '@/components/ai/AiTaskGenerator';
 import type { Board, Task } from '@/types';
-import { Filter, X, ChevronDown } from 'lucide-react';
+import { Filter, X, ChevronDown, Sparkles, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 interface Props {
   board: Board;
   projectId: string;
+  projectName?: string;
+  projectDescription?: string;
 }
 
 type Priority = Task['priority'];
@@ -28,10 +33,11 @@ const PRIORITIES: { value: Priority; label: string; borderColor: string; textCol
   { value: 'low',      label: 'Baja',    borderColor: '#27272A', textColor: '#71717A', bg: 'rgba(113,113,122,0.10)' },
 ];
 
-export function KanbanBoard({ board, projectId }: Props) {
+export function KanbanBoard({ board, projectId, projectName = '', projectDescription }: Props) {
   const { data: tasks = [], isLoading } = useTasks(projectId, board.boardId);
   const { data: members = [] } = useMembers(projectId);
   const updateTask = useUpdateTask(projectId, board.boardId);
+  const qc = useQueryClient();
 
   const { activeModal, selectedTaskId, closeModal } = useUIStore();
   const detailTask = activeModal === 'task-detail'
@@ -40,6 +46,23 @@ export function KanbanBoard({ board, projectId }: Props) {
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [pendingColumnId, setPendingColumnId] = useState<string | null>(null);
+  const [showAiGenerator, setShowAiGenerator] = useState(false);
+
+  // ── WebSocket — sincronización en tiempo real ──────────────────────────────
+  const { socket, isConnected } = useSocket(projectId);
+
+  useEffect(() => {
+    if (!socket) return;
+    const invalidate = () => qc.invalidateQueries({ queryKey: ['tasks', board.boardId] });
+    socket.on('task:created', invalidate);
+    socket.on('task:updated', invalidate);
+    socket.on('task:deleted', invalidate);
+    return () => {
+      socket.off('task:created', invalidate);
+      socket.off('task:updated', invalidate);
+      socket.off('task:deleted', invalidate);
+    };
+  }, [socket, qc, board.boardId]);
 
   const [filterPriority, setFilterPriority] = useState<Priority | null>(null);
   const [filterLabel, setFilterLabel]       = useState('');
@@ -108,6 +131,41 @@ export function KanbanBoard({ board, projectId }: Props) {
       {/* ── Filter bar ──────────────────────────────────────────────────────── */}
       <div className="px-5 py-2.5 shrink-0" style={{ borderBottom: '1px solid #1C1C1F' }}>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* ── Botón IA ───────────────────────────────────────────────────── */}
+          <button
+            onClick={() => setShowAiGenerator(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer transition-all duration-150"
+            style={{
+              background: 'rgba(99,102,241,0.12)',
+              border: '1px solid rgba(99,102,241,0.25)',
+              color: '#818CF8',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(99,102,241,0.22)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(99,102,241,0.12)'; }}
+            title="Generar tareas con IA"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Generar con IA
+          </button>
+
+          {/* ── Divisor ───────────────────────────────────────────────────── */}
+          <span className="w-px h-4" style={{ background: '#1C1C1F' }} />
+
+          {/* ── Indicador WebSocket ───────────────────────────────────────── */}
+          <span
+            className="flex items-center gap-1 text-[10px] font-medium"
+            style={{ color: isConnected ? '#34D399' : '#52525B' }}
+            title={isConnected ? 'Sincronización en tiempo real activa' : 'Sin conexión en tiempo real'}
+          >
+            {isConnected
+              ? <Wifi className="w-3 h-3" />
+              : <WifiOff className="w-3 h-3" />
+            }
+            {isConnected ? 'En vivo' : 'Offline'}
+          </span>
+
+          <span className="w-px h-4" style={{ background: '#1C1C1F' }} />
+
           <button
             onClick={() => setShowFilters(v => !v)}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer transition-all duration-150"
@@ -215,6 +273,18 @@ export function KanbanBoard({ board, projectId }: Props) {
           boardId={board.boardId}
           members={members}
           onClose={closeModal}
+        />
+      )}
+
+      {/* Modal de generación de tareas con IA */}
+      {showAiGenerator && (
+        <AiTaskGenerator
+          projectId={projectId}
+          boardId={board.boardId}
+          projectName={projectName}
+          projectDescription={projectDescription}
+          columns={board.columns.slice().sort((a, b) => a.order - b.order)}
+          onClose={() => setShowAiGenerator(false)}
         />
       )}
     </div>

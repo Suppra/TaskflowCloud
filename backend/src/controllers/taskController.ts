@@ -8,6 +8,7 @@ import { sendSuccess, sendCreated } from '../utils/response';
 import { asyncHandler } from '../utils/asyncHandler';
 import { z } from 'zod';
 import { uploadService } from '../services/uploadService';
+import { socketEmitter } from '../events/socketEmitter';
 
 // Tipos MIME permitidos para adjuntos (allowlist estricta)
 const ALLOWED_MIME_TYPES = [
@@ -30,6 +31,7 @@ export const taskController = {
       input,
       req.user!.userId
     );
+    socketEmitter.taskCreated(req.params.projectId, task);
     return sendCreated(res, task, 'Tarea creada');
   }),
 
@@ -59,12 +61,14 @@ export const taskController = {
     await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
     const input = updateTaskSchema.parse(req.body);
     const task = await taskService.update(req.params.taskId, input, req.user!.userId);
+    socketEmitter.taskUpdated(req.params.projectId, task);
     return sendSuccess(res, task, 'Tarea actualizada');
   }),
 
   delete: asyncHandler(async (req: AuthRequest, res: Response) => {
     await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
     await taskService.delete(req.params.taskId);
+    socketEmitter.taskDeleted(req.params.projectId, req.params.taskId);
     return sendSuccess(res, null, 'Tarea eliminada');
   }),
 

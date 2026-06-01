@@ -6,6 +6,7 @@ import projectRouter from './projects';
 import metricsRouter from './metrics';
 import notificationRouter from './notifications';
 import reportRouter from './reports';
+import aiRouter from './ai';
 
 const router = Router();
 
@@ -38,5 +39,6 @@ router.use('/projects', projectRouter);
 router.use('/metrics', metricsRouter);
 router.use('/notifications', notificationRouter);
 router.use('/reports', reportRouter);
+router.use('/ai', aiRouter);
 
 export default router;

@@ -86,7 +86,12 @@ export default function BoardPage() {
 
       {/* ── Kanban board ─────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-hidden">
-        <KanbanBoard board={board} projectId={projectId!} />
+        <KanbanBoard
+          board={board}
+          projectId={projectId!}
+          projectName={project?.name}
+          projectDescription={project?.description}
+        />
       </div>
     </div>
   );

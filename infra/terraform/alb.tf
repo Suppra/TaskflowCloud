@@ -27,6 +27,14 @@ resource "aws_lb_target_group" "backend" {
     interval            = 30
     matcher             = "200"
   }
+
+  # Sticky sessions por cookie — necesario para Socket.io cuando hay
+  # múltiples tareas ECS (cada cliente debe ir siempre al mismo contenedor)
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 86400 # 24 horas
+    enabled         = true
+  }
 }
 
 # ── Listener HTTP (sin dominio: sirve directo; con dominio: redirige a HTTPS) ─

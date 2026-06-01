@@ -1,3 +1,4 @@
+import { createServer } from 'http';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -8,6 +9,7 @@ import { logger } from './config/logger';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { swaggerSpec } from './config/swagger';
+import { initSocket } from './config/socket';
 import router from './routes';
 
 const app = express();
@@ -92,11 +94,23 @@ app.use('/api/v1', router);
 app.use(notFound);
 app.use(errorHandler);
 
+// ── HTTP Server + Socket.io ────────────────────────────────
+// Se usa createServer() en lugar de app.listen() para que Socket.io
+// comparta el mismo puerto que la API REST.
+const httpServer = createServer(app);
+initSocket(httpServer);
+
 // ── Start ──────────────────────────────────────────────────
 const PORT = parseInt(env.PORT, 10);
-app.listen(PORT, () => {
-  logger.info(`🚀 TaskFlow Backend corriendo en http://localhost:${PORT}`);
-  logger.info(`   Entorno: ${env.NODE_ENV}`);
+httpServer.listen(PORT, () => {
+  logger.info(`TaskFlow Backend corriendo en http://localhost:${PORT}`);
+  logger.info(`  Entorno: ${env.NODE_ENV}`);
+  logger.info(`  WebSockets: habilitados`);
+  if (env.ANTHROPIC_API_KEY) {
+    logger.info(`  IA (Claude): habilitada`);
+  } else {
+    logger.info(`  IA (Claude): deshabilitada — configura ANTHROPIC_API_KEY para activar`);
+  }
 });
 
 export default app;
