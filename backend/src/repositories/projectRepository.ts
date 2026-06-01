@@ -66,6 +66,25 @@ export const projectRepository = {
     return items;
   },
 
+  /** Proyectos con una invitación pendiente para el email dado. */
+  async findByPendingEmail(email: string): Promise<Project[]> {
+    const items: Project[] = [];
+    let lastKey: Record<string, unknown> | undefined;
+    do {
+      const result = await dynamoDB.send(
+        new ScanCommand({
+          TableName: TABLE,
+          FilterExpression: 'contains(pendingInviteEmails, :email)',
+          ExpressionAttributeValues: { ':email': email },
+          ExclusiveStartKey: lastKey,
+        })
+      );
+      items.push(...((result.Items ?? []) as Project[]));
+      lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastKey);
+    return items;
+  },
+
   async update(projectId: string, updates: Partial<Project>): Promise<Project | null> {
     const entries = Object.entries(updates).filter(([k]) => k !== 'projectId');
     if (entries.length === 0) return this.findById(projectId);

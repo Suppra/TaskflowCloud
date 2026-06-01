@@ -1,4 +1,4 @@
-import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { s3 } from '../config/aws';
 import { env } from '../config/env';
@@ -17,6 +17,20 @@ export const uploadService = {
 
     const url = await getSignedUrl(s3, command, { expiresIn: 300 });
     return { url, key, filename };
+  },
+
+  /** Genera una URL pre-firmada de descarga (GET) para un adjunto privado. */
+  async getPresignedDownloadUrl(key: string, filename?: string) {
+    const command = new GetObjectCommand({
+      Bucket: env.S3_BUCKET_ATTACHMENTS,
+      Key: key,
+      // Fuerza la descarga con el nombre original del archivo
+      ...(filename
+        ? { ResponseContentDisposition: `attachment; filename="${filename}"` }
+        : {}),
+    });
+    const url = await getSignedUrl(s3, command, { expiresIn: 300 });
+    return { url, expiresIn: 300 };
   },
 
   async deleteFile(key: string) {

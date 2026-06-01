@@ -4,6 +4,8 @@ import { dynamoDB } from '../config/aws';
 import authRouter from './auth';
 import projectRouter from './projects';
 import metricsRouter from './metrics';
+import notificationRouter from './notifications';
+import reportRouter from './reports';
 
 const router = Router();
 
@@ -34,5 +36,7 @@ router.get('/health', async (_req, res) => {
 router.use('/auth', authRouter);
 router.use('/projects', projectRouter);
 router.use('/metrics', metricsRouter);
+router.use('/notifications', notificationRouter);
+router.use('/reports', reportRouter);
 
 export default router;

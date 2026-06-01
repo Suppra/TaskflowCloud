@@ -4,7 +4,13 @@ import { env } from '../config/env';
 import { JwtPayload } from '../types';
 import { sendError } from '../utils/response';
 
-export interface AuthRequest extends Request {
+/**
+ * En @types/express-serve-static-core v5, ParamsDictionary tiene
+ * [key: string]: string | string[].  Al tipar los params como
+ * Record<string, string> los controladores reciben `string` directamente,
+ * que es siempre el caso real en rutas con :param.
+ */
+export interface AuthRequest extends Request<Record<string, string>> {
   user?: JwtPayload;
 }
 

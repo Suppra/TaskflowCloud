@@ -1,6 +1,13 @@
 import { api } from './api';
 import type { Task, Comment } from '@/types';
 
+export interface AttachmentInput {
+  filename: string;
+  s3Key: string;
+  fileSize: number;
+  mimeType: string;
+}
+
 export const taskService = {
   listByBoard: (projectId: string, boardId: string) =>
     api.get<{ success: boolean; data: Task[] }>(`/projects/${projectId}/boards/${boardId}/tasks`).then(r => r.data.data!),
@@ -33,5 +40,32 @@ export const taskService = {
     api.post<{ success: boolean; data: { url: string; key: string; filename: string } }>(
       `/projects/${projectId}/boards/${boardId}/tasks/${taskId}/attachments/presign`,
       { filename, mimeType }
+    ).then(r => r.data.data!),
+
+  // Sube el binario directamente a S3 con la presigned URL (no pasa por el backend)
+  uploadToS3: (url: string, file: File) =>
+    fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    }).then(res => {
+      if (!res.ok) throw new Error(`Error al subir a S3 (${res.status})`);
+    }),
+
+  // Registra el adjunto en la tarea tras el upload a S3
+  addAttachment: (projectId: string, boardId: string, taskId: string, data: AttachmentInput) =>
+    api.post<{ success: boolean; data: Task }>(
+      `/projects/${projectId}/boards/${boardId}/tasks/${taskId}/attachments`,
+      data
+    ).then(r => r.data.data!),
+
+  getAttachmentDownloadUrl: (projectId: string, boardId: string, taskId: string, attachmentId: string) =>
+    api.get<{ success: boolean; data: { url: string; expiresIn: number } }>(
+      `/projects/${projectId}/boards/${boardId}/tasks/${taskId}/attachments/${attachmentId}/download`
+    ).then(r => r.data.data!),
+
+  deleteAttachment: (projectId: string, boardId: string, taskId: string, attachmentId: string) =>
+    api.delete<{ success: boolean; data: Task }>(
+      `/projects/${projectId}/boards/${boardId}/tasks/${taskId}/attachments/${attachmentId}`
     ).then(r => r.data.data!),
 };

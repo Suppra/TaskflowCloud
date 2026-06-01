@@ -1,7 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { projectRepository } from '../repositories/projectRepository';
 import { userRepository } from '../repositories/userRepository';
-import { Project, ProjectMember } from '../types';
+import { assignmentService } from './assignmentService';
+import { eventPublisher } from '../events/eventPublisher';
+import { Project, ProjectMember, PendingInvite, User } from '../types';
 import { CreateProjectInput, UpdateProjectInput } from '../validators/project';
 
 export const projectService = {
@@ -78,9 +80,44 @@ export const projectService = {
   ): Promise<Project> {
     const project = await this.findById(projectId);
     assertAdmin(project, requesterId);
+    const normalizedEmail = email.toLowerCase();
 
-    const user = await userRepository.findByEmail(email);
-    if (!user) throw Object.assign(new Error('Usuario no encontrado'), { statusCode: 404 });
+    const user = await userRepository.findByEmail(normalizedEmail);
+
+    // ── Email aún no registrado → guardar invitación pendiente ──────────────
+    // Se reclamará automáticamente cuando esa persona se registre.
+    if (!user) {
+      const already = (project.pendingInviteEmails ?? []).includes(normalizedEmail);
+      if (already) {
+        throw Object.assign(new Error('Ya existe una invitación pendiente para ese email'), { statusCode: 409 });
+      }
+      const invite: PendingInvite = {
+        email: normalizedEmail,
+        role,
+        invitedBy: requesterId,
+        invitedAt: new Date().toISOString(),
+      };
+      const updatedPending = await projectRepository.update(projectId, {
+        pendingInvites: [...(project.pendingInvites ?? []), invite],
+        pendingInviteEmails: [...(project.pendingInviteEmails ?? []), normalizedEmail],
+        updatedAt: new Date().toISOString(),
+      });
+
+      await eventPublisher.publish({
+        type: 'INVITATION_SENT',
+        payload: {
+          projectId,
+          projectName: project.name,
+          invitedEmail: normalizedEmail,
+          role,
+          invitedBy: requesterId,
+          pending: true,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
+      return updatedPending!;
+    }
 
     const alreadyMember = project.members.some(m => m.userId === user.userId);
     if (alreadyMember) throw Object.assign(new Error('El usuario ya es miembro'), { statusCode: 409 });
@@ -94,6 +131,77 @@ export const projectService = {
     const updated = await projectRepository.update(projectId, {
       members: [...project.members, newMember],
       memberUserIds: [...(project.memberUserIds ?? []), user.userId],
+      updatedAt: new Date().toISOString(),
+    });
+
+    await eventPublisher.publish({
+      type: 'INVITATION_SENT',
+      payload: {
+        projectId,
+        projectName: project.name,
+        invitedUserId: user.userId,
+        invitedEmail: user.email,
+        invitedName: user.name,
+        role,
+        invitedBy: requesterId,
+      },
+      timestamp: new Date().toISOString(),
+    });
+
+    return updated!;
+  },
+
+  /**
+   * Lista los miembros del proyecto con sus datos de usuario (nombre, email, avatar)
+   * resueltos. Sirve tanto para la gestión de colaboradores como para los
+   * selectores de asignación de tareas en el frontend.
+   */
+  async listMembersDetailed(projectId: string, requesterId: string) {
+    const project = await this.assertMember(projectId, requesterId);
+
+    const detailed = await Promise.all(
+      project.members.map(async (m) => {
+        const user = await userRepository.findById(m.userId);
+        return {
+          userId: m.userId,
+          role: m.role,
+          joinedAt: m.joinedAt,
+          name: user?.name ?? 'Usuario desconocido',
+          email: user?.email ?? '',
+          avatar: user?.avatar,
+          isOwner: project.ownerId === m.userId,
+        };
+      })
+    );
+
+    return detailed;
+  },
+
+  async updateMemberRole(
+    projectId: string,
+    memberId: string,
+    role: ProjectMember['role'],
+    requesterId: string
+  ): Promise<Project> {
+    const project = await this.findById(projectId);
+    assertAdmin(project, requesterId);
+
+    if (project.ownerId === memberId) {
+      throw Object.assign(
+        new Error('No se puede cambiar el rol del propietario'),
+        { statusCode: 400 }
+      );
+    }
+
+    const exists = project.members.some(m => m.userId === memberId);
+    if (!exists) {
+      throw Object.assign(new Error('El miembro no pertenece al proyecto'), { statusCode: 404 });
+    }
+
+    const updated = await projectRepository.update(projectId, {
+      members: project.members.map(m =>
+        m.userId === memberId ? { ...m, role } : m
+      ),
       updatedAt: new Date().toISOString(),
     });
     return updated!;
@@ -112,7 +220,48 @@ export const projectService = {
       memberUserIds: (project.memberUserIds ?? []).filter(id => id !== memberId),
       updatedAt: new Date().toISOString(),
     });
+
+    // Automatización: las tareas abiertas del miembro removido se reasignan
+    // automáticamente al colaborador con menor carga (no quedan huérfanas).
+    await assignmentService.reassignOrphanTasks(projectId, memberId);
+
     return updated!;
+  },
+
+  /**
+   * Reclama las invitaciones pendientes de un usuario recién registrado:
+   * lo agrega como miembro a todos los proyectos que lo invitaron por email.
+   * Se llama automáticamente tras el registro (filosofía: el sistema automatiza).
+   *
+   * @returns número de proyectos a los que se unió.
+   */
+  async claimPendingInvites(user: Pick<User, 'userId' | 'email'>): Promise<number> {
+    const email = user.email.toLowerCase();
+    const projects = await projectRepository.findByPendingEmail(email);
+    if (projects.length === 0) return 0;
+
+    let joined = 0;
+    for (const project of projects) {
+      const invite = (project.pendingInvites ?? []).find(p => p.email === email);
+      if (!invite) continue;
+      if (project.members.some(m => m.userId === user.userId)) continue;
+
+      const newMember: ProjectMember = {
+        userId: user.userId,
+        role: invite.role,
+        joinedAt: new Date().toISOString(),
+      };
+
+      await projectRepository.update(project.projectId, {
+        members: [...project.members, newMember],
+        memberUserIds: [...(project.memberUserIds ?? []), user.userId],
+        pendingInvites: (project.pendingInvites ?? []).filter(p => p.email !== email),
+        pendingInviteEmails: (project.pendingInviteEmails ?? []).filter(e => e !== email),
+        updatedAt: new Date().toISOString(),
+      });
+      joined++;
+    }
+    return joined;
   },
 
   /** Verifica que el usuario es miembro del proyecto (cualquier rol). Lanza 403 si no. */

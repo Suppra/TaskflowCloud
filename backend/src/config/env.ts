@@ -1,3 +1,4 @@
+import 'dotenv/config'; // carga backend/.env automáticamente
 import { z } from 'zod';
 
 const envSchema = z.object({
@@ -22,6 +23,10 @@ const envSchema = z.object({
 
   FRONTEND_URL: z.string().default('http://localhost:5173'),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
+
+  // Máximo de tareas abiertas que el auto-asignador intenta no superar por persona.
+  // Si todos están en el tope, igualmente se asigna al de menor carga.
+  MAX_TASKS_PER_MEMBER: z.coerce.number().int().positive().default(8),
 });
 
 const parsed = envSchema.safeParse(process.env);

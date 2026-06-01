@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { projectService } from '../services/projectService';
 import { AuthRequest } from '../middleware/auth';
-import { createProjectSchema, updateProjectSchema, inviteMemberSchema } from '../validators/project';
+import { createProjectSchema, updateProjectSchema, inviteMemberSchema, updateMemberRoleSchema } from '../validators/project';
 import { sendSuccess, sendCreated } from '../utils/response';
 import { asyncHandler } from '../utils/asyncHandler';
 
@@ -48,6 +48,25 @@ export const projectController = {
       req.user!.userId
     );
     return sendSuccess(res, project, 'Miembro invitado correctamente');
+  }),
+
+  listMembers: asyncHandler(async (req: AuthRequest, res: Response) => {
+    const members = await projectService.listMembersDetailed(
+      req.params.projectId,
+      req.user!.userId
+    );
+    return sendSuccess(res, members);
+  }),
+
+  updateMemberRole: asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { role } = updateMemberRoleSchema.parse(req.body);
+    const project = await projectService.updateMemberRole(
+      req.params.projectId,
+      req.params.memberId,
+      role,
+      req.user!.userId
+    );
+    return sendSuccess(res, project, 'Rol actualizado');
   }),
 
   removeMember: asyncHandler(async (req: AuthRequest, res: Response) => {

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { userRepository } from '../repositories/userRepository';
+import { projectService } from './projectService';
 import { env } from '../config/env';
 import { User, JwtPayload } from '../types';
 import { RegisterInput, LoginInput } from '../validators/auth';
@@ -45,6 +46,15 @@ export const authService = {
     };
 
     await userRepository.create(user);
+
+    // Automatización: si fue invitado a proyectos antes de registrarse,
+    // se le agrega automáticamente como miembro al crear su cuenta.
+    try {
+      await projectService.claimPendingInvites({ userId: user.userId, email: user.email });
+    } catch {
+      // No bloquear el registro si falla la reclamación de invitaciones
+    }
+
     const { accessToken, refreshToken } = signTokens({
       userId: user.userId,
       email: user.email,

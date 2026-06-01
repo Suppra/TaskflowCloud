@@ -5,27 +5,49 @@ import { TaskCard } from './TaskCard';
 import { useCreateTask } from '@/hooks/useTasks';
 import { Plus } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import type { Column, Task } from '@/types';
+import type { Column, Task, ProjectMemberDetail } from '@/types';
 
 interface Props {
   column: Column;
   tasks: Task[];
   projectId: string;
   boardId: string;
+  members: ProjectMemberDetail[];
 }
 
-export function KanbanColumn({ column, tasks, projectId, boardId }: Props) {
+type Priority = Task['priority'];
+
+const PRIORITY_OPTIONS: { value: Priority; label: string; color: string }[] = [
+  { value: 'low',      label: 'Baja',     color: 'text-green-400' },
+  { value: 'medium',   label: 'Media',    color: 'text-yellow-400' },
+  { value: 'high',     label: 'Alta',     color: 'text-orange-400' },
+  { value: 'critical', label: 'Crítica',  color: 'text-red-400' },
+];
+
+export function KanbanColumn({ column, tasks, projectId, boardId, members }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: column.columnId });
   const createTask = useCreateTask(projectId, boardId);
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
+  const [priority, setPriority] = useState<Priority>('medium');
+  const [assigneeId, setAssigneeId] = useState(''); // '' = automático (lo decide el sistema)
+
+  // Solo admins y members pueden recibir tareas (los viewers son de solo lectura)
+  const assignableMembers = members.filter(m => m.role !== 'viewer');
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
     createTask.mutate(
-      { title: title.trim(), columnId: column.columnId, priority: 'medium', labels: [], order: tasks.length },
-      { onSuccess: () => { setTitle(''); setAdding(false); } }
+      {
+        title: title.trim(),
+        columnId: column.columnId,
+        priority,
+        labels: [],
+        order: tasks.length,
+        ...(assigneeId ? { assigneeId } : {}), // sin assigneeId => auto-asignación en el backend
+      },
+      { onSuccess: () => { setTitle(''); setPriority('medium'); setAssigneeId(''); setAdding(false); } }
     );
   };
 
@@ -57,7 +79,7 @@ export function KanbanColumn({ column, tasks, projectId, boardId }: Props) {
         )}
       >
         <SortableContext items={tasks.map(t => t.taskId)} strategy={verticalListSortingStrategy}>
-          {tasks.map(task => <TaskCard key={task.taskId} task={task} />)}
+          {tasks.map(task => <TaskCard key={task.taskId} task={task} members={members} />)}
         </SortableContext>
 
         {/* Quick add */}
@@ -70,6 +92,38 @@ export function KanbanColumn({ column, tasks, projectId, boardId }: Props) {
               placeholder="Título de la tarea..."
               className="w-full text-sm bg-transparent text-white placeholder-slate-500 outline-none"
             />
+            {/* Selector de prioridad */}
+            <div className="flex items-center gap-1 mt-2">
+              <span className="text-[10px] uppercase tracking-wide text-slate-500 mr-1">Prioridad</span>
+              {PRIORITY_OPTIONS.map(p => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => setPriority(p.value)}
+                  className={cn(
+                    'text-[11px] px-2 py-0.5 rounded-full border font-medium transition',
+                    priority === p.value
+                      ? `${p.color} border-current bg-slate-900`
+                      : 'text-slate-500 border-slate-700 hover:border-slate-500'
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {/* Selector de asignado — "Automático" deja que el sistema balancee la carga */}
+            <div className="mt-2">
+              <select
+                value={assigneeId}
+                onChange={e => setAssigneeId(e.target.value)}
+                className="w-full text-xs bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-300 focus:outline-none focus:border-blue-600 transition"
+              >
+                <option value="">⚡ Automático (el sistema asigna)</option>
+                {assignableMembers.map(m => (
+                  <option key={m.userId} value={m.userId}>{m.name}</option>
+                ))}
+              </select>
+            </div>
             <div className="flex gap-1 mt-2">
               <button type="submit" disabled={createTask.isPending} className="text-xs px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-medium transition">
                 {createTask.isPending ? '...' : 'Agregar'}

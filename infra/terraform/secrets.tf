@@ -1,0 +1,32 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Secrets Manager: secretos JWT (nunca en el repo ni en variables planas)
+# Genera valores aleatorios la primera vez; ECS los inyecta como env vars.
+# ─────────────────────────────────────────────────────────────────────────────
+
+resource "random_password" "jwt_secret" {
+  length  = 64
+  special = false
+}
+
+resource "random_password" "jwt_refresh_secret" {
+  length  = 64
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "jwt" {
+  name        = "${local.name_prefix}/jwt"
+  description = "Secretos de firma JWT para TaskFlow backend"
+}
+
+resource "aws_secretsmanager_secret_version" "jwt" {
+  secret_id = aws_secretsmanager_secret.jwt.id
+  secret_string = jsonencode({
+    JWT_SECRET         = random_password.jwt_secret.result
+    JWT_REFRESH_SECRET = random_password.jwt_refresh_secret.result
+  })
+
+  # No re-generar el secreto en cada apply (rotar manualmente cuando sea necesario)
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}

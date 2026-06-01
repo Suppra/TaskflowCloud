@@ -24,16 +24,43 @@ export const taskRepository = {
     return (result.Item as Task) ?? null;
   },
 
-  async findByBoard(boardId: string): Promise<Task[]> {
+  async findByBoard(
+    boardId: string,
+    filters?: { priority?: string; assigneeId?: string; label?: string }
+  ): Promise<Task[]> {
     const items: Task[] = [];
     let lastKey: Record<string, unknown> | undefined;
+
+    // Construir FilterExpression dinámico para los filtros opcionales
+    const filterParts: string[] = [];
+    const nameMap: Record<string, string> = {};
+    const valueMap: Record<string, unknown> = { ':boardId': boardId };
+
+    if (filters?.priority) {
+      filterParts.push('#priority = :priority');
+      nameMap['#priority'] = 'priority';
+      valueMap[':priority'] = filters.priority;
+    }
+    if (filters?.assigneeId) {
+      filterParts.push('assigneeId = :assigneeId');
+      valueMap[':assigneeId'] = filters.assigneeId;
+    }
+    if (filters?.label) {
+      filterParts.push('contains(labels, :label)');
+      valueMap[':label'] = filters.label;
+    }
+
     do {
       const result = await dynamoDB.send(
         new QueryCommand({
           TableName: TABLE,
           IndexName: 'boardId-index',
           KeyConditionExpression: 'boardId = :boardId',
-          ExpressionAttributeValues: { ':boardId': boardId },
+          ...(filterParts.length > 0 && {
+            FilterExpression: filterParts.join(' AND '),
+          }),
+          ExpressionAttributeNames: Object.keys(nameMap).length > 0 ? nameMap : undefined,
+          ExpressionAttributeValues: valueMap,
           ExclusiveStartKey: lastKey,
         })
       );

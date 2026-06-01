@@ -1,7 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { taskRepository } from '../repositories/taskRepository';
+import { assignmentService } from './assignmentService';
+import { uploadService } from './uploadService';
 import { eventPublisher } from '../events/eventPublisher';
-import { Task, Subtask } from '../types';
+import { Task, Subtask, Attachment } from '../types';
 import { CreateTaskInput, UpdateTaskInput } from '../validators/task';
 
 export const taskService = {
@@ -12,6 +14,17 @@ export const taskService = {
     reporterId: string
   ): Promise<Task> {
     const now = new Date().toISOString();
+
+    // ── Auto-asignación inteligente ───────────────────────────────────────
+    // Si quien crea la tarea no eligió un responsable explícito, el sistema
+    // asigna automáticamente al colaborador con menor carga de trabajo
+    // (balanceo ponderado por prioridad). Filosofía: el usuario hace lo básico,
+    // el sistema automatiza el resto.
+    const assigneeId =
+      input.assigneeId ?? (await assignmentService.pickAssignee(projectId));
+
+    const autoAssigned = !input.assigneeId && !!assigneeId;
+
     const task: Task = {
       taskId: uuidv4(),
       boardId,
@@ -21,7 +34,7 @@ export const taskService = {
       title: input.title,
       description: input.description,
       priority: input.priority,
-      assigneeId: input.assigneeId,
+      assigneeId,
       reporterId,
       dueDate: input.dueDate,
       labels: input.labels,
@@ -36,7 +49,7 @@ export const taskService = {
 
     await eventPublisher.publish({
       type: 'TASK_CREATED',
-      payload: { taskId: created.taskId, projectId, assigneeId: input.assigneeId, reporterId },
+      payload: { taskId: created.taskId, projectId, assigneeId, reporterId, autoAssigned },
       timestamp: now,
     });
 
@@ -49,8 +62,11 @@ export const taskService = {
     return task;
   },
 
-  async findByBoard(boardId: string): Promise<Task[]> {
-    return taskRepository.findByBoard(boardId);
+  async findByBoard(
+    boardId: string,
+    filters?: { priority?: string; assigneeId?: string; label?: string }
+  ): Promise<Task[]> {
+    return taskRepository.findByBoard(boardId, filters);
   },
 
   async update(taskId: string, input: UpdateTaskInput, userId: string): Promise<Task> {
@@ -106,5 +122,64 @@ export const taskService = {
       updatedAt: new Date().toISOString(),
     });
     return updated!;
+  },
+
+  /**
+   * Registra los metadatos de un adjunto en la tarea DESPUÉS de que el cliente
+   * subió el archivo a S3 con la presigned URL. El binario nunca pasa por el
+   * backend (upload directo a S3); aquí solo se persiste su referencia.
+   */
+  async addAttachment(
+    taskId: string,
+    data: { filename: string; s3Key: string; fileSize: number; mimeType: string },
+    uploadedBy: string
+  ): Promise<Task> {
+    const task = await this.findById(taskId);
+    const attachment: Attachment = {
+      attachmentId: uuidv4(),
+      filename: data.filename,
+      s3Key: data.s3Key,
+      fileSize: data.fileSize,
+      mimeType: data.mimeType,
+      uploadedBy,
+      uploadedAt: new Date().toISOString(),
+    };
+    const updated = await taskRepository.update(taskId, {
+      attachments: [...(task.attachments ?? []), attachment],
+      updatedAt: new Date().toISOString(),
+    });
+    return updated!;
+  },
+
+  /** Elimina un adjunto de la tarea y borra el objeto del bucket S3. */
+  async removeAttachment(taskId: string, attachmentId: string): Promise<Task> {
+    const task = await this.findById(taskId);
+    const target = (task.attachments ?? []).find(a => a.attachmentId === attachmentId);
+    if (!target) {
+      throw Object.assign(new Error('Adjunto no encontrado'), { statusCode: 404 });
+    }
+
+    // Borra el objeto en S3 (no bloquea si falla en local/dev sin S3 real)
+    try {
+      await uploadService.deleteFile(target.s3Key);
+    } catch (err) {
+      console.error('[taskService] Error al borrar objeto S3:', (err as Error).message);
+    }
+
+    const updated = await taskRepository.update(taskId, {
+      attachments: (task.attachments ?? []).filter(a => a.attachmentId !== attachmentId),
+      updatedAt: new Date().toISOString(),
+    });
+    return updated!;
+  },
+
+  /** Devuelve una URL pre-firmada para descargar un adjunto concreto. */
+  async getAttachmentDownloadUrl(taskId: string, attachmentId: string) {
+    const task = await this.findById(taskId);
+    const target = (task.attachments ?? []).find(a => a.attachmentId === attachmentId);
+    if (!target) {
+      throw Object.assign(new Error('Adjunto no encontrado'), { statusCode: 404 });
+    }
+    return uploadService.getPresignedDownloadUrl(target.s3Key, target.filename);
   },
 };

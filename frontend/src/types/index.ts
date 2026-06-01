@@ -31,6 +31,17 @@ export interface ProjectMember {
   joinedAt: string;
 }
 
+/** Miembro con datos de usuario resueltos (devuelto por GET /projects/:id/members). */
+export interface ProjectMemberDetail {
+  userId: string;
+  role: 'admin' | 'member' | 'viewer';
+  joinedAt: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  isOwner: boolean;
+}
+
 export interface Board {
   boardId: string;
   projectId: string;
@@ -101,6 +112,15 @@ export interface Notification {
   title: string;
   message: string;
   read: boolean;
+  createdAt: string;
+}
+
+export interface Report {
+  reportId: string;
+  projectId: string;
+  type: 'pdf' | 'csv';
+  s3Key: string;
+  generatedBy: string;
   createdAt: string;
 }
 

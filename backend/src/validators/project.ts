@@ -16,5 +16,9 @@ export const inviteMemberSchema = z.object({
   role: z.enum(['admin', 'member', 'viewer']).default('member'),
 });
 
+export const updateMemberRoleSchema = z.object({
+  role: z.enum(['admin', 'member', 'viewer']),
+});
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;

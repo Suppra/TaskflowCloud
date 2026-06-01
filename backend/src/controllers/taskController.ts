@@ -35,7 +35,17 @@ export const taskController = {
 
   listByBoard: asyncHandler(async (req: AuthRequest, res: Response) => {
     await projectService.assertMember(req.params.projectId, req.user!.userId);
-    const tasks = await taskService.findByBoard(req.params.boardId);
+    const filters = {
+      priority:   req.query.priority   as string | undefined,
+      assigneeId: req.query.assigneeId as string | undefined,
+      label:      req.query.label      as string | undefined,
+    };
+    // Eliminar claves undefined para no pasar filtros vacíos
+    const cleanFilters = Object.fromEntries(
+      Object.entries(filters).filter(([, v]) => v !== undefined)
+    ) as { priority?: string; assigneeId?: string; label?: string };
+
+    const tasks = await taskService.findByBoard(req.params.boardId, cleanFilters);
     return sendSuccess(res, tasks);
   }),
 
@@ -97,5 +107,35 @@ export const taskController = {
 
     const result = await uploadService.getPresignedUploadUrl(filename, mimeType, req.params.taskId);
     return sendSuccess(res, result);
+  }),
+
+  // Registra los metadatos del adjunto tras el upload directo a S3
+  addAttachment: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
+
+    const data = z.object({
+      filename: z.string().min(1).max(255),
+      s3Key: z.string().min(1),
+      fileSize: z.number().int().nonnegative().max(50 * 1024 * 1024), // máx 50 MB
+      mimeType: z.string().refine(
+        v => ALLOWED_MIME_TYPES.includes(v),
+        { message: 'Tipo de archivo no permitido' }
+      ),
+    }).parse(req.body);
+
+    const task = await taskService.addAttachment(req.params.taskId, data, req.user!.userId);
+    return sendCreated(res, task, 'Adjunto agregado');
+  }),
+
+  getAttachmentDownloadUrl: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    const result = await taskService.getAttachmentDownloadUrl(req.params.taskId, req.params.attachmentId);
+    return sendSuccess(res, result);
+  }),
+
+  removeAttachment: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    const task = await taskService.removeAttachment(req.params.taskId, req.params.attachmentId);
+    return sendSuccess(res, task, 'Adjunto eliminado');
   }),
 };

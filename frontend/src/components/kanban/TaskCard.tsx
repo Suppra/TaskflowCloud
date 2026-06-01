@@ -3,9 +3,9 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/utils/cn';
 import { formatDate, isOverdue } from '@/utils/date';
-import { Calendar, MessageSquare, Paperclip, AlertCircle } from 'lucide-react';
+import { Calendar, Paperclip, AlertCircle } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
-import type { Task } from '@/types';
+import type { Task, ProjectMemberDetail } from '@/types';
 
 const PRIORITY_STYLES = {
   low:      'bg-slate-700 text-slate-300',
@@ -20,10 +20,12 @@ const PRIORITY_LABELS = {
 
 interface Props {
   task: Task;
+  members?: ProjectMemberDetail[];
   isDragging?: boolean;
 }
 
-export function TaskCard({ task, isDragging = false }: Props) {
+export function TaskCard({ task, members = [], isDragging = false }: Props) {
+  const assignee = task.assigneeId ? members.find(m => m.userId === task.assigneeId) : undefined;
   const {
     attributes,
     listeners,
@@ -111,6 +113,23 @@ export function TaskCard({ task, isDragging = false }: Props) {
         {task.attachments.length > 0 && (
           <span className="flex items-center gap-0.5">
             <Paperclip className="w-3 h-3" />{task.attachments.length}
+          </span>
+        )}
+
+        {/* Responsable asignado */}
+        {assignee && (
+          <span
+            className="ml-auto flex items-center gap-1.5 max-w-[55%]"
+            title={`Asignado a ${assignee.name}`}
+          >
+            <span className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0 overflow-hidden">
+              {assignee.avatar ? (
+                <img src={assignee.avatar} alt={assignee.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[9px] font-bold text-white">{(assignee.name || '?')[0].toUpperCase()}</span>
+              )}
+            </span>
+            <span className="truncate text-slate-400">{assignee.name}</span>
           </span>
         )}
       </div>

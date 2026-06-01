@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useProjects, useCreateProject, useDeleteProject } from '@/hooks/useProjects';
-import { FolderKanban, Plus, Trash2, Archive, MoreHorizontal } from 'lucide-react';
+import { FolderKanban, Plus, Trash2 } from 'lucide-react';
 import { formatDate } from '@/utils/date';
 
 export default function ProjectsPage() {

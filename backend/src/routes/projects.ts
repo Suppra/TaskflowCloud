@@ -12,7 +12,9 @@ router.get('/:projectId', projectController.getById);
 router.patch('/:projectId', projectController.update);
 router.patch('/:projectId/archive', projectController.archive);
 router.delete('/:projectId', projectController.delete);
+router.get('/:projectId/members', projectController.listMembers);
 router.post('/:projectId/members', projectController.inviteMember);
+router.patch('/:projectId/members/:memberId', projectController.updateMemberRole);
 router.delete('/:projectId/members/:memberId', projectController.removeMember);
 
 // Boards anidados bajo proyecto

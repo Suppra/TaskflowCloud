@@ -1,14 +1,12 @@
-import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { boardService } from '@/services/boardService';
 import { projectService } from '@/services/projectService';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
-import { Plus, ChevronRight, LayoutGrid } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 export default function BoardPage() {
   const { projectId, boardId } = useParams<{ projectId: string; boardId: string }>();
-  const qc = useQueryClient();
 
   const { data: project } = useQuery({
     queryKey: ['projects', projectId],

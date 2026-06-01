@@ -18,6 +18,10 @@ export interface Project {
   members: ProjectMember[];
   /** Desnormalizado: lista de userIds de todos los miembros para filtros eficientes */
   memberUserIds: string[];
+  /** Invitaciones a emails aún no registrados (se reclaman al registrarse). */
+  pendingInvites?: PendingInvite[];
+  /** Desnormalizado: emails con invitación pendiente, para filtros eficientes. */
+  pendingInviteEmails?: string[];
   status: 'active' | 'archived';
   createdAt: string;
   updatedAt: string;
@@ -27,6 +31,13 @@ export interface ProjectMember {
   userId: string;
   role: 'admin' | 'member' | 'viewer';
   joinedAt: string;
+}
+
+export interface PendingInvite {
+  email: string;
+  role: 'admin' | 'member' | 'viewer';
+  invitedBy: string;
+  invitedAt: string;
 }
 
 export interface Board {

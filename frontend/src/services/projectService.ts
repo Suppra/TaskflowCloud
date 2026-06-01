@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { Project } from '@/types';
+import type { Project, ProjectMemberDetail } from '@/types';
 
 export const projectService = {
   list: () =>
@@ -21,4 +21,13 @@ export const projectService = {
 
   inviteMember: (projectId: string, data: { email: string; role: string }) =>
     api.post<{ success: boolean; data: Project }>(`/projects/${projectId}/members`, data).then(r => r.data.data!),
+
+  getMembers: (projectId: string) =>
+    api.get<{ success: boolean; data: ProjectMemberDetail[] }>(`/projects/${projectId}/members`).then(r => r.data.data!),
+
+  updateMemberRole: (projectId: string, memberId: string, role: string) =>
+    api.patch<{ success: boolean; data: Project }>(`/projects/${projectId}/members/${memberId}`, { role }).then(r => r.data.data!),
+
+  removeMember: (projectId: string, memberId: string) =>
+    api.delete<{ success: boolean; data: Project }>(`/projects/${projectId}/members/${memberId}`).then(r => r.data.data!),
 };

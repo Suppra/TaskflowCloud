@@ -1,0 +1,23 @@
+# Copia este archivo a terraform.tfvars y ajusta los valores.
+# terraform.tfvars está en .gitignore — NUNCA lo subas al repo.
+
+aws_region   = "us-east-1"
+environment  = "dev"
+project_name = "taskflow"
+
+# ── Escalado del backend ─────────────────────────────────────────────────────
+backend_image_tag     = "latest"
+backend_cpu           = 512
+backend_memory        = 1024
+backend_desired_count = 2
+
+# ── Aplicación ───────────────────────────────────────────────────────────────
+ses_from_email       = "noreply@taskflow.dev"
+max_tasks_per_member = 8
+
+# ── DNS / dominio (opcional) ─────────────────────────────────────────────────
+# Para usar dominio propio + HTTPS, crea primero la zona en Route53 y pon:
+# domain_name    = "taskflow.dev"
+# create_route53 = true
+domain_name    = ""
+create_route53 = false

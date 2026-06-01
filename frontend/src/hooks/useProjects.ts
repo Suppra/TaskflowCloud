@@ -31,3 +31,47 @@ export const useDeleteProject = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
   });
 };
+
+export const useMembers = (projectId: string) =>
+  useQuery({
+    queryKey: ['projects', projectId, 'members'],
+    queryFn: () => projectService.getMembers(projectId),
+    enabled: !!projectId,
+  });
+
+export const useInviteMember = (projectId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { email: string; role: string }) =>
+      projectService.inviteMember(projectId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['projects', projectId] });
+      qc.invalidateQueries({ queryKey: ['projects', projectId, 'members'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+};
+
+export const useUpdateMemberRole = (projectId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ memberId, role }: { memberId: string; role: string }) =>
+      projectService.updateMemberRole(projectId, memberId, role),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['projects', projectId] });
+      qc.invalidateQueries({ queryKey: ['projects', projectId, 'members'] });
+    },
+  });
+};
+
+export const useRemoveMember = (projectId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: string) => projectService.removeMember(projectId, memberId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['projects', projectId] });
+      qc.invalidateQueries({ queryKey: ['projects', projectId, 'members'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+};
