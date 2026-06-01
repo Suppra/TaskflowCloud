@@ -2,17 +2,21 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/services/api';
-import { Settings, User, Save, RefreshCw } from 'lucide-react';
-import { cn } from '@/utils/cn';
+import { Settings, User, Save, Loader2, CheckCircle2 } from 'lucide-react';
+
+const inputCls =
+  'w-full px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150' +
+  ' border text-zinc-50 placeholder-zinc-600' +
+  ' focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30';
 
 export default function SettingsPage() {
-  const user = useAuthStore(s => s.user);
+  const user    = useAuthStore(s => s.user);
   const setUser = useAuthStore(s => s.setUser);
   const qc = useQueryClient();
 
-  const [name, setName] = useState(user?.name ?? '');
+  const [name,   setName]   = useState(user?.name ?? '');
   const [avatar, setAvatar] = useState(user?.avatar ?? '');
-  const [saved, setSaved] = useState(false);
+  const [saved,  setSaved]  = useState(false);
 
   const update = useMutation({
     mutationFn: (data: { name?: string; avatar?: string }) =>
@@ -21,7 +25,7 @@ export default function SettingsPage() {
       if (updatedUser) setUser(updatedUser as NonNullable<typeof user>);
       qc.invalidateQueries({ queryKey: ['auth', 'me'] });
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setTimeout(() => setSaved(false), 2500);
     },
   });
 
@@ -34,119 +38,168 @@ export default function SettingsPage() {
     update.mutate(payload);
   };
 
+  const initials = (user?.name ?? 'U').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-6 max-w-xl mx-auto">
+
+      {/* Page header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Settings className="w-6 h-6 text-blue-400" />
+        <h1
+          className="text-xl font-bold flex items-center gap-2.5"
+          style={{ color: '#FAFAFA', letterSpacing: '-0.02em' }}
+        >
+          <Settings className="w-5 h-5" style={{ color: '#818CF8' }} />
           Ajustes
         </h1>
-        <p className="text-slate-400 text-sm mt-0.5">Administra tu perfil y preferencias</p>
+        <p className="text-sm mt-0.5" style={{ color: '#52525B' }}>
+          Administra tu perfil y preferencias
+        </p>
       </div>
 
-      {/* Perfil */}
-      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-4">
-        <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-700">
-          <User className="w-5 h-5 text-slate-400" />
-          <h2 className="font-semibold text-white">Perfil</h2>
+      {/* ── Profile panel ────────────────────────────────────────────────────── */}
+      <div className="rounded-xl p-5 mb-4" style={{ background: '#111113', border: '1px solid #1C1C1F' }}>
+        <div
+          className="flex items-center gap-2.5 mb-5 pb-4"
+          style={{ borderBottom: '1px solid #1C1C1F' }}
+        >
+          <User className="w-4 h-4" style={{ color: '#52525B' }} />
+          <h2 className="font-semibold text-sm" style={{ color: '#E4E4E7' }}>Perfil</h2>
         </div>
 
-        {/* Avatar preview */}
+        {/* Avatar + info */}
         <div className="flex items-center gap-4 mb-5">
-          <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden shrink-0">
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden shrink-0 font-bold text-xl"
+            style={{ background: avatar ? 'transparent' : '#4F46E5', color: '#FAFAFA' }}
+          >
             {avatar ? (
-              <img src={avatar} alt="Avatar" className="w-full h-full object-cover"
-                onError={() => setAvatar('')} />
-            ) : (
-              <span className="text-2xl font-bold text-white">
-                {(user?.name ?? 'U')[0].toUpperCase()}
-              </span>
-            )}
+              <img
+                src={avatar}
+                alt="Avatar"
+                className="w-full h-full object-cover"
+                onError={() => setAvatar('')}
+              />
+            ) : initials}
           </div>
           <div>
-            <p className="font-medium text-white">{user?.name}</p>
-            <p className="text-sm text-slate-400">{user?.email}</p>
-            <p className="text-xs text-slate-500 mt-0.5 capitalize">{user?.role}</p>
+            <p className="font-semibold text-sm" style={{ color: '#FAFAFA' }}>{user?.name}</p>
+            <p className="text-xs mt-0.5" style={{ color: '#52525B' }}>{user?.email}</p>
+            <span
+              className="inline-block text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full mt-1.5"
+              style={{
+                background: 'rgba(99,102,241,0.12)',
+                color: '#818CF8',
+                border: '1px solid rgba(99,102,241,0.2)',
+              }}
+            >
+              {user?.role}
+            </span>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#71717A' }}>
               Nombre completo
             </label>
             <input
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="Tu nombre"
-              className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+              className={inputCls}
+              style={{ background: '#0D0D10', borderColor: '#27272A' }}
+              onFocus={e => { (e.target as HTMLElement).style.borderColor = '#6366F1'; }}
+              onBlur={e => { (e.target as HTMLElement).style.borderColor = '#27272A'; }}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">
-              URL del avatar <span className="text-slate-500 font-normal">(opcional)</span>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#71717A' }}>
+              URL del avatar
+              <span className="ml-1 normal-case font-normal" style={{ color: '#3F3F46' }}>(opcional)</span>
             </label>
             <input
               type="url"
               value={avatar}
               onChange={e => setAvatar(e.target.value)}
               placeholder="https://ejemplo.com/foto.jpg"
-              className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+              className={inputCls}
+              style={{ background: '#0D0D10', borderColor: '#27272A' }}
+              onFocus={e => { (e.target as HTMLElement).style.borderColor = '#6366F1'; }}
+              onBlur={e => { (e.target as HTMLElement).style.borderColor = '#27272A'; }}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#71717A' }}>
               Email
             </label>
             <input
               value={user?.email ?? ''}
               disabled
-              className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-500 cursor-not-allowed"
+              className={inputCls + ' cursor-not-allowed'}
+              style={{ background: '#0A0A0D', borderColor: '#1C1C1F', color: '#52525B' }}
             />
-            <p className="text-xs text-slate-500 mt-1">El email no puede cambiarse.</p>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={update.isPending || (!name.trim() && !avatar.trim())}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition',
-                saved
-                  ? 'bg-green-600 text-white'
-                  : 'bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white'
-              )}
-            >
-              {update.isPending ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              {saved ? '¡Guardado!' : update.isPending ? 'Guardando...' : 'Guardar cambios'}
-            </button>
+            <p className="text-[10px] mt-1" style={{ color: '#3F3F46' }}>
+              El email no puede cambiarse.
+            </p>
           </div>
 
           {update.isError && (
-            <p className="text-sm text-red-400 mt-2">
+            <p className="text-xs" style={{ color: '#F87171' }}>
               Error al guardar. Verifica los datos e intenta de nuevo.
             </p>
           )}
+
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              disabled={update.isPending || (!name.trim() && !avatar.trim())}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
+              style={{
+                background: saved ? '#059669' : '#6366F1',
+                color: '#FAFAFA',
+              }}
+              onMouseEnter={e => {
+                if (!update.isPending && !saved)
+                  (e.currentTarget as HTMLElement).style.background = '#4F46E5';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = saved ? '#059669' : '#6366F1';
+              }}
+            >
+              {update.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : saved ? (
+                <CheckCircle2 className="w-4 h-4" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              {saved ? 'Guardado' : update.isPending ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
         </form>
       </div>
 
-      {/* Info de la cuenta */}
-      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-        <h2 className="font-semibold text-white mb-4">Información de la cuenta</h2>
-        <dl className="space-y-3 text-sm">
+      {/* ── Account info ──────────────────────────────────────────────────────── */}
+      <div className="rounded-xl p-5" style={{ background: '#111113', border: '1px solid #1C1C1F' }}>
+        <h2 className="font-semibold text-sm mb-4" style={{ color: '#E4E4E7' }}>
+          Informacion de la cuenta
+        </h2>
+        <dl className="space-y-3">
           {[
-            ['Rol', user?.role ?? '—'],
-            ['ID de usuario', user?.userId ?? '—'],
-          ].map(([label, value]) => (
-            <div key={label} className="flex justify-between">
-              <dt className="text-slate-400">{label}</dt>
-              <dd className="text-slate-300 font-mono text-xs">{value}</dd>
+            { label: 'Rol',            value: user?.role ?? '-' },
+            { label: 'ID de usuario',  value: user?.userId ?? '-' },
+          ].map(({ label, value }) => (
+            <div key={label} className="flex justify-between items-center">
+              <dt className="text-xs font-medium" style={{ color: '#71717A' }}>{label}</dt>
+              <dd
+                className="text-xs font-medium tabular-nums"
+                style={{ color: '#A1A1AA', fontFamily: "'JetBrains Mono', monospace" }}
+              >
+                {value}
+              </dd>
             </div>
           ))}
         </dl>

@@ -1,4 +1,52 @@
+/* ── Google Fonts: Plus Jakarta Sans + JetBrains Mono ──────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @import "tailwindcss";
+
+/* ── Design system tokens ───────────────────────────────────────────────────── */
+:root {
+  /* Backgrounds */
+  --bg-base:       #09090B; /* zinc-950 */
+  --bg-surface:    #111113; /* surface 1 */
+  --bg-elevated:   #1C1C1F; /* surface 2 - cards, modals */
+  --bg-overlay:    #232327; /* surface 3 - dropdowns, tooltips */
+
+  /* Borders */
+  --border:        #27272A; /* zinc-800 */
+  --border-subtle: #1C1C1F; /* zinc-900-ish */
+  --border-focus:  #6366F1; /* indigo-500 */
+
+  /* Text */
+  --text-primary:  #FAFAFA; /* zinc-50 */
+  --text-secondary:#A1A1AA; /* zinc-400 */
+  --text-muted:    #52525B; /* zinc-600 */
+
+  /* Accent — indigo-500 family */
+  --accent:        #6366F1;
+  --accent-hover:  #4F46E5;
+  --accent-subtle: rgba(99, 102, 241, 0.10);
+  --accent-border: rgba(99, 102, 241, 0.30);
+
+  /* Semantic */
+  --success:       #10B981; /* emerald-500 */
+  --warning:       #F59E0B; /* amber-500 */
+  --danger:        #EF4444; /* red-500 */
+  --info:          #3B82F6; /* blue-500 */
+
+  /* Radii */
+  --r-xs:  4px;
+  --r-sm:  6px;
+  --r-md:  8px;
+  --r-lg:  12px;
+  --r-xl:  16px;
+  --r-2xl: 24px;
+
+  /* Shadows */
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md:  0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg:  0 12px 40px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.4);
+  --shadow-xl:  0 24px 64px rgba(0, 0, 0, 0.7);
+}
 
 /* ── Base reset ────────────────────────────────────────────────────────────── */
 *,
@@ -7,23 +55,75 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
-  /* Fondo oscuro base — evita flash blanco al cargar y márgenes visibles */
-  background-color: #020617; /* slate-950 */
-  color: #f1f5f9;            /* slate-100 */
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
 }
 
 #root {
-  /* Sin restricción de ancho — el layout lo maneja MainLayout/AuthLayout */
   width: 100%;
   min-height: 100svh;
   display: flex;
   flex-direction: column;
+}
+
+/* ── Scrollbar styling ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #3F3F46;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #52525B;
+}
+
+/* ── Focus ring ─────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Mono numbers ───────────────────────────────────────────────────────────── */
+.font-mono,
+.tabular-nums {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Transition defaults ────────────────────────────────────────────────────── */
+button, a, input, select, textarea {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -6,16 +6,50 @@ import { useUnreadCount } from '@/hooks/useNotifications';
 import { cn } from '@/utils/cn';
 import {
   LayoutDashboard, FolderKanban, Bell, Settings,
-  ChevronLeft, ChevronRight, LogOut, User, BarChart3
+  ChevronLeft, ChevronRight, LogOut, BarChart3
 } from 'lucide-react';
 
+/* ── Logo mark ──────────────────────────────────────────────────────────────── */
+function LogoMark({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="#6366F1" />
+      <rect x="8" y="9" width="7" height="3" rx="1.5" fill="white" />
+      <rect x="8" y="14.5" width="11" height="3" rx="1.5" fill="white" fillOpacity="0.7" />
+      <rect x="8" y="20" width="5" height="3" rx="1.5" fill="white" fillOpacity="0.4" />
+      <rect x="18" y="9" width="6" height="14" rx="3" fill="white" fillOpacity="0.9" />
+    </svg>
+  );
+}
+
 const navItems = [
-  { to: '/dashboard',      icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/projects',       icon: FolderKanban,    label: 'Proyectos' },
-  { to: '/notifications',  icon: Bell,            label: 'Notificaciones', badge: true },
-  { to: '/reports',        icon: BarChart3,       label: 'Reportes' },
-  { to: '/settings',       icon: Settings,        label: 'Ajustes' },
+  { to: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/projects',      icon: FolderKanban,    label: 'Proyectos' },
+  { to: '/notifications', icon: Bell,            label: 'Notificaciones', badge: true },
+  { to: '/reports',       icon: BarChart3,       label: 'Reportes' },
+  { to: '/settings',      icon: Settings,        label: 'Ajustes' },
 ];
+
+/* ── Avatar initials ────────────────────────────────────────────────────────── */
+function Avatar({ name, avatar, size = 28 }: { name?: string; avatar?: string; size?: number }) {
+  const initials = (name ?? 'U').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <div
+      className="rounded-full flex items-center justify-center shrink-0 overflow-hidden font-semibold"
+      style={{
+        width: size, height: size,
+        background: avatar ? 'transparent' : '#4F46E5',
+        fontSize: size * 0.38,
+        color: '#FAFAFA',
+      }}
+    >
+      {avatar
+        ? <img src={avatar} alt={name} className="w-full h-full object-cover" />
+        : initials
+      }
+    </div>
+  );
+}
 
 export default function MainLayout() {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
@@ -27,90 +61,186 @@ export default function MainLayout() {
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden">
-      {/* Sidebar */}
-      <aside className={cn(
-        'flex flex-col bg-slate-900 border-r border-slate-800 transition-all duration-300 shrink-0',
-        sidebarOpen ? 'w-60' : 'w-16'
-      )}>
+    <div
+      className="flex overflow-hidden"
+      style={{ height: '100dvh', background: '#09090B' }}
+    >
+      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
+      <aside
+        className="flex flex-col shrink-0 transition-all duration-300"
+        style={{
+          width: sidebarOpen ? 220 : 60,
+          background: '#111113',
+          borderRight: '1px solid #1C1C1F',
+        }}
+      >
         {/* Logo */}
-        <div className="flex items-center gap-3 p-4 border-b border-slate-800 h-16">
-          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white shrink-0">T</div>
-          {sidebarOpen && <span className="font-bold text-white truncate">TaskFlow</span>}
+        <div
+          className="flex items-center h-14 shrink-0"
+          style={{
+            padding: sidebarOpen ? '0 16px' : '0',
+            justifyContent: sidebarOpen ? 'flex-start' : 'center',
+            borderBottom: '1px solid #1C1C1F',
+          }}
+        >
+          <LogoMark size={28} />
+          {sidebarOpen && (
+            <span
+              className="ml-2.5 font-bold text-sm whitespace-nowrap overflow-hidden"
+              style={{ color: '#FAFAFA', letterSpacing: '-0.02em' }}
+            >
+              TaskFlow Cloud
+            </span>
+          )}
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 p-2 space-y-1">
+        {/* Navigation */}
+        <nav className="flex-1 flex flex-col gap-0.5 p-2 overflow-y-auto">
           {navItems.map(({ to, icon: Icon, label, badge }) => (
             <NavLink
               key={to}
               to={to}
+              title={!sidebarOpen ? label : undefined}
               className={({ isActive }) => cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative',
+                'group flex items-center rounded-lg transition-all duration-150 relative select-none',
+                sidebarOpen ? 'gap-2.5 px-3 py-2' : 'justify-center py-2.5',
                 isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                  ? 'text-indigo-400'
+                  : 'text-zinc-500 hover:text-zinc-200'
               )}
+              style={({ isActive }) => ({
+                background: isActive ? 'rgba(99,102,241,0.12)' : 'transparent',
+              })}
+              onMouseEnter={e => {
+                const el = e.currentTarget;
+                if (!el.classList.contains('text-indigo-400')) {
+                  el.style.background = 'rgba(255,255,255,0.04)';
+                }
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget;
+                if (!el.classList.contains('text-indigo-400')) {
+                  el.style.background = 'transparent';
+                }
+              }}
             >
-              <div className="relative shrink-0">
-                <Icon className="w-5 h-5" />
-                {/* Badge de notificaciones no leídas */}
-                {badge && unreadCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
-                    {unreadCount > 99 ? '99+' : unreadCount}
+              {/* Active indicator line */}
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <span
+                      className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-r-full"
+                      style={{ background: '#6366F1' }}
+                    />
+                  )}
+                  <span className="relative shrink-0">
+                    <Icon className="w-[18px] h-[18px]" strokeWidth={isActive ? 2 : 1.75} />
+                    {badge && unreadCount > 0 && (
+                      <span
+                        className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full font-bold"
+                        style={{
+                          minWidth: 14, height: 14,
+                          fontSize: 9,
+                          background: '#EF4444',
+                          color: '#FAFAFA',
+                          padding: '0 3px',
+                        }}
+                      >
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
                   </span>
-                )}
-              </div>
-              {sidebarOpen && (
-                <span className="truncate flex-1">{label}</span>
-              )}
-              {sidebarOpen && badge && unreadCount > 0 && (
-                <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
+                  {sidebarOpen && (
+                    <span className="text-sm font-medium truncate flex-1">{label}</span>
+                  )}
+                  {sidebarOpen && badge && unreadCount > 0 && (
+                    <span
+                      className="ml-auto flex items-center justify-center rounded-full text-[10px] font-bold"
+                      style={{
+                        minWidth: 18, height: 18,
+                        background: '#EF4444',
+                        color: '#FAFAFA',
+                        padding: '0 4px',
+                      }}
+                    >
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </>
               )}
             </NavLink>
           ))}
         </nav>
 
-        {/* User + toggle */}
-        <div className="p-2 border-t border-slate-800 space-y-1">
-          <div className={cn('flex items-center gap-3 px-3 py-2', !sidebarOpen && 'justify-center')}>
-            <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center shrink-0 overflow-hidden">
-              {user?.avatar ? (
-                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-4 h-4 text-white" />
-              )}
-            </div>
-            {sidebarOpen && (
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-100 truncate">{user?.name}</p>
-                <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+        {/* Bottom: user + toggle */}
+        <div className="p-2 shrink-0" style={{ borderTop: '1px solid #1C1C1F' }}>
+          {/* User info */}
+          {sidebarOpen ? (
+            <div
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg mb-1"
+              style={{ background: 'rgba(255,255,255,0.03)' }}
+            >
+              <Avatar name={user?.name} avatar={user?.avatar} size={28} />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold truncate" style={{ color: '#FAFAFA' }}>{user?.name}</p>
+                <p className="text-[10px] truncate" style={{ color: '#52525B' }}>{user?.email}</p>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="flex justify-center py-1.5 mb-1">
+              <Avatar name={user?.name} avatar={user?.avatar} size={28} />
+            </div>
+          )}
+
+          {/* Logout */}
           <button
             onClick={() => logout.mutate()}
+            title={!sidebarOpen ? 'Cerrar sesión' : undefined}
             className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-red-900/30 hover:text-red-400 transition-colors w-full',
-              !sidebarOpen && 'justify-center'
+              'flex items-center w-full rounded-lg text-xs transition-all duration-150 cursor-pointer',
+              sidebarOpen ? 'gap-2 px-3 py-2' : 'justify-center py-2'
             )}
+            style={{ color: '#52525B' }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLElement).style.color = '#FCA5A5';
+              (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)';
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLElement).style.color = '#52525B';
+              (e.currentTarget as HTMLElement).style.background = 'transparent';
+            }}
           >
-            <LogOut className="w-5 h-5 shrink-0" />
-            {sidebarOpen && 'Cerrar sesión'}
+            <LogOut className="w-4 h-4 shrink-0" />
+            {sidebarOpen && <span className="font-medium">Cerrar sesión</span>}
           </button>
+
+          {/* Collapse toggle */}
           <button
             onClick={toggleSidebar}
-            className="flex items-center justify-center w-full p-2 rounded-lg text-slate-500 hover:bg-slate-800 hover:text-slate-100 transition-colors"
+            className={cn(
+              'flex items-center justify-center w-full rounded-lg py-1.5 mt-0.5 transition-all duration-150 cursor-pointer',
+            )}
+            style={{ color: '#3F3F46' }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLElement).style.color = '#A1A1AA';
+              (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)';
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLElement).style.color = '#3F3F46';
+              (e.currentTarget as HTMLElement).style.background = 'transparent';
+            }}
+            title={sidebarOpen ? 'Colapsar' : 'Expandir'}
           >
-            {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            {sidebarOpen
+              ? <ChevronLeft className="w-3.5 h-3.5" />
+              : <ChevronRight className="w-3.5 h-3.5" />
+            }
           </button>
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 overflow-auto">
+      {/* ── Main content ────────────────────────────────────────────────────── */}
+      <main className="flex-1 overflow-auto" style={{ background: '#09090B' }}>
         <Outlet />
       </main>
     </div>
