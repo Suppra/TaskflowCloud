@@ -25,6 +25,10 @@ interface Props {
   boardId: string;
   members: ProjectMemberDetail[];
   onClose: () => void;
+  /** ID de la columna "Completado" (última por order). Al marcar completa, la tarea se mueve aquí. */
+  completionColumnId?: string;
+  /** ID de la primera columna (Por hacer). Al desmarcar, la tarea regresa aquí. */
+  defaultColumnId?: string;
 }
 
 type Priority = Task['priority'];
@@ -45,7 +49,7 @@ const toLocalInput = (iso?: string) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-export function TaskDetailModal({ task, projectId, boardId, members, onClose }: Props) {
+export function TaskDetailModal({ task, projectId, boardId, members, onClose, completionColumnId, defaultColumnId }: Props) {
   const updateTask = useUpdateTask(projectId, boardId);
   const deleteTask = useDeleteTask(projectId, boardId);
   const addSubtask = useAddSubtask(projectId, boardId, task.taskId);
@@ -83,10 +87,25 @@ export function TaskDetailModal({ task, projectId, boardId, members, onClose }: 
   };
 
   const handleToggleComplete = () => {
-    updateTask.mutate({
-      taskId: task.taskId,
-      data: { completedAt: isCompleted ? undefined : new Date().toISOString() },
-    });
+    if (isCompleted) {
+      // Desmarcar: borrar completedAt (null = REMOVE en DynamoDB) y volver a la primera columna
+      updateTask.mutate({
+        taskId: task.taskId,
+        data: {
+          completedAt: null,
+          ...(defaultColumnId ? { columnId: defaultColumnId } : {}),
+        },
+      });
+    } else {
+      // Marcar: fijar completedAt y mover a la columna de completado
+      updateTask.mutate({
+        taskId: task.taskId,
+        data: {
+          completedAt: new Date().toISOString(),
+          ...(completionColumnId ? { columnId: completionColumnId } : {}),
+        },
+      });
+    }
   };
 
   const handleDelete = () => {

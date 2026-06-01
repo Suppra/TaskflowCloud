@@ -76,7 +76,7 @@ export interface Task {
   order: number;
   createdAt: string;
   updatedAt: string;
-  completedAt?: string;
+  completedAt?: string | null;  // null = desmarcar (REMOVE en DynamoDB)
 }
 
 export interface Subtask {

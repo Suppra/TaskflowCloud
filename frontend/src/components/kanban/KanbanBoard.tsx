@@ -98,15 +98,31 @@ export function KanbanBoard({ board, projectId, projectName = '', projectDescrip
     if (overColumn) setPendingColumnId(overColumn.columnId);
   };
 
+  // Columna de mayor order = columna de completado; primera = columna inicial
+  const sortedColumns      = board.columns.slice().sort((a, b) => a.order - b.order);
+  const completionColumnId = sortedColumns[sortedColumns.length - 1]?.columnId;
+  const defaultColumnId    = sortedColumns[0]?.columnId;
+
   const handleDragEnd = ({ over }: DragEndEvent) => {
     const dragged = activeTask;
     setActiveTask(null);
     if (!over || !dragged) { setPendingColumnId(null); return; }
+
     if (pendingColumnId && dragged.columnId !== pendingColumnId) {
-      updateTask.mutate({ taskId: dragged.taskId, data: { columnId: pendingColumnId } });
+      const data: Partial<Task> = { columnId: pendingColumnId };
+      // Arrastrar A la última columna → completar automáticamente
+      if (pendingColumnId === completionColumnId && !dragged.completedAt) {
+        data.completedAt = new Date().toISOString();
+      }
+      // Arrastrar DESDE la última columna → desmarcar completada
+      else if (dragged.columnId === completionColumnId && pendingColumnId !== completionColumnId) {
+        data.completedAt = null;
+      }
+      updateTask.mutate({ taskId: dragged.taskId, data });
       setPendingColumnId(null);
       return;
     }
+
     const overTask = tasks.find(t => t.taskId === over.id);
     if (dragged && overTask && dragged.columnId === overTask.columnId && dragged.taskId !== overTask.taskId) {
       updateTask.mutate({ taskId: dragged.taskId, data: { order: overTask.order } });
@@ -273,6 +289,8 @@ export function KanbanBoard({ board, projectId, projectName = '', projectDescrip
           boardId={board.boardId}
           members={members}
           onClose={closeModal}
+          completionColumnId={completionColumnId}
+          defaultColumnId={defaultColumnId}
         />
       )}
 

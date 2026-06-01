@@ -20,7 +20,8 @@ export const updateTaskSchema = z.object({
   dueDate: z.string().datetime().optional(),
   labels: z.array(z.string()).optional(),
   order: z.number().int().min(0).optional(),
-  completedAt: z.string().datetime().optional(),
+  // null = desmarcar (genera REMOVE en DynamoDB); string ISO = marcar completada
+  completedAt: z.string().datetime().nullable().optional(),
 });
 
 export const addCommentSchema = z.object({

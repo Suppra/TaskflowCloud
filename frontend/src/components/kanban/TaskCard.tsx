@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/utils/cn';
 import { formatDate, isOverdue } from '@/utils/date';
-import { Calendar, Paperclip, AlertCircle, CheckSquare } from 'lucide-react';
+import { Calendar, Paperclip, AlertCircle, CheckSquare, CheckCircle2 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import type { Task, ProjectMemberDetail } from '@/types';
 
@@ -80,29 +80,45 @@ export function TaskCard({ task, members = [], isDragging = false }: Props) {
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        background: hovered && !ghost ? '#1C1C1F' : '#111113',
+        background: task.completedAt
+          ? (hovered && !ghost ? 'rgba(16,185,129,0.07)' : 'rgba(16,185,129,0.04)')
+          : (hovered && !ghost ? '#1C1C1F' : '#111113'),
         borderTop:    `1px solid ${hovered && !ghost ? '#27272A' : '#1C1C1F'}`,
         borderRight:  `1px solid ${hovered && !ghost ? '#27272A' : '#1C1C1F'}`,
         borderBottom: `1px solid ${hovered && !ghost ? '#27272A' : '#1C1C1F'}`,
-        borderLeft:   `3px solid ${priorityBorderColor}`,
-        opacity: ghost ? 0.35 : 1,
+        borderLeft:   `3px solid ${task.completedAt ? '#10B981' : priorityBorderColor}`,
+        opacity: ghost ? 0.35 : (task.completedAt ? 0.75 : 1),
         outline: ghost ? '1px solid #6366F1' : 'none',
         outlineOffset: 2,
       }}
     >
-      {/* Priority + overdue */}
+      {/* Priority / completada + overdue */}
       <div className="flex items-center justify-between mb-2">
-        <span
-          className="text-[10px] font-semibold uppercase tracking-wide"
-          style={{ color: PRIORITY_TEXT[task.priority] ?? '#52525B' }}
-        >
-          {PRIORITY_LABEL[task.priority] ?? task.priority}
-        </span>
-        {overdue && <AlertCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#EF4444' }} />}
+        {task.completedAt ? (
+          <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: '#10B981' }}>
+            <CheckCircle2 className="w-3 h-3" /> Completada
+          </span>
+        ) : (
+          <span
+            className="text-[10px] font-semibold uppercase tracking-wide"
+            style={{ color: PRIORITY_TEXT[task.priority] ?? '#52525B' }}
+          >
+            {PRIORITY_LABEL[task.priority] ?? task.priority}
+          </span>
+        )}
+        {overdue && !task.completedAt && (
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#EF4444' }} />
+        )}
       </div>
 
       {/* Title */}
-      <p className="text-sm font-medium leading-snug mb-2.5 line-clamp-2" style={{ color: '#E4E4E7' }}>
+      <p
+        className="text-sm font-medium leading-snug mb-2.5 line-clamp-2"
+        style={{
+          color: task.completedAt ? '#52525B' : '#E4E4E7',
+          textDecoration: task.completedAt ? 'line-through' : 'none',
+        }}
+      >
         {task.title}
       </p>
 

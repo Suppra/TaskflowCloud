@@ -120,21 +120,34 @@ export const taskRepository = {
     const entries = Object.entries(updates).filter(([k]) => k !== 'taskId');
     if (entries.length === 0) return this.findById(taskId);
 
-    const updateExp = 'SET ' + entries.map((_, i) => `#k${i} = :v${i}`).join(', ');
-    const nameMap: Record<string, string> = {};
-    const valueMap: Record<string, unknown> = {};
-    entries.forEach(([k, v], i) => {
-      nameMap[`#k${i}`] = k;
-      valueMap[`:v${i}`] = v;
-    });
+    // Separar SET (valores normales) de REMOVE (valores null → borrar atributo)
+    const setEntries  = entries.filter(([, v]) => v !== null && v !== undefined);
+    const removeKeys  = entries.filter(([, v]) => v === null).map(([k]) => k);
+
+    const exprParts: string[] = [];
+    const nameMap:   Record<string, string>  = {};
+    const valueMap:  Record<string, unknown> = {};
+
+    if (setEntries.length > 0) {
+      setEntries.forEach(([k, v], i) => {
+        nameMap[`#s${i}`]  = k;
+        valueMap[`:v${i}`] = v;
+      });
+      exprParts.push('SET ' + setEntries.map((_, i) => `#s${i} = :v${i}`).join(', '));
+    }
+
+    if (removeKeys.length > 0) {
+      removeKeys.forEach((k, i) => { nameMap[`#r${i}`] = k; });
+      exprParts.push('REMOVE ' + removeKeys.map((_, i) => `#r${i}`).join(', '));
+    }
 
     const result = await dynamoDB.send(
       new UpdateCommand({
         TableName: TABLE,
         Key: { taskId },
-        UpdateExpression: updateExp,
+        UpdateExpression: exprParts.join(' '),
         ExpressionAttributeNames: nameMap,
-        ExpressionAttributeValues: valueMap,
+        ...(Object.keys(valueMap).length > 0 && { ExpressionAttributeValues: valueMap }),
         ReturnValues: 'ALL_NEW',
       })
     );
