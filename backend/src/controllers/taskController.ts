@@ -22,7 +22,7 @@ const ALLOWED_MIME_TYPES = [
 
 export const taskController = {
   create: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
     const input = createTaskSchema.parse(req.body);
     const task = await taskService.create(
       req.params.boardId,
@@ -34,7 +34,7 @@ export const taskController = {
   }),
 
   listByBoard: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertMember(req.params.projectId, req.user!.userId); // lectura: viewers permitidos
     const filters = {
       priority:   req.query.priority   as string | undefined,
       assigneeId: req.query.assigneeId as string | undefined,
@@ -50,52 +50,52 @@ export const taskController = {
   }),
 
   getById: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertMember(req.params.projectId, req.user!.userId); // lectura: viewers permitidos
     const task = await taskService.findById(req.params.taskId);
     return sendSuccess(res, task);
   }),
 
   update: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
     const input = updateTaskSchema.parse(req.body);
     const task = await taskService.update(req.params.taskId, input, req.user!.userId);
     return sendSuccess(res, task, 'Tarea actualizada');
   }),
 
   delete: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
     await taskService.delete(req.params.taskId);
     return sendSuccess(res, null, 'Tarea eliminada');
   }),
 
   addSubtask: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
     const { title } = addSubtaskSchema.parse(req.body);
     const task = await taskService.addSubtask(req.params.taskId, title);
     return sendSuccess(res, task, 'Subtarea agregada');
   }),
 
   toggleSubtask: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
     const task = await taskService.toggleSubtask(req.params.taskId, req.params.subtaskId);
     return sendSuccess(res, task);
   }),
 
   addComment: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
     const { content } = addCommentSchema.parse(req.body);
     const comment = await commentService.create(req.params.taskId, req.user!.userId, content);
     return sendCreated(res, comment, 'Comentario agregado');
   }),
 
   getComments: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertMember(req.params.projectId, req.user!.userId); // lectura: viewers permitidos
     const comments = await commentService.findByTask(req.params.taskId);
     return sendSuccess(res, comments);
   }),
 
   getPresignedUrl: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
 
     const { filename, mimeType } = z.object({
       filename: z.string().min(1).max(255),
@@ -111,7 +111,7 @@ export const taskController = {
 
   // Registra los metadatos del adjunto tras el upload directo a S3
   addAttachment: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
 
     const data = z.object({
       filename: z.string().min(1).max(255),
@@ -128,13 +128,13 @@ export const taskController = {
   }),
 
   getAttachmentDownloadUrl: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertMember(req.params.projectId, req.user!.userId); // lectura: viewers permitidos
     const result = await taskService.getAttachmentDownloadUrl(req.params.taskId, req.params.attachmentId);
     return sendSuccess(res, result);
   }),
 
   removeAttachment: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await projectService.assertMember(req.params.projectId, req.user!.userId);
+    await projectService.assertNotViewer(req.params.projectId, req.user!.userId);
     const task = await taskService.removeAttachment(req.params.taskId, req.params.attachmentId);
     return sendSuccess(res, task, 'Adjunto eliminado');
   }),

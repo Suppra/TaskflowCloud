@@ -34,6 +34,8 @@ export default function ProjectDetailPage() {
 
   // ¿El usuario actual es administrador del proyecto? (puede gestionar miembros)
   const isAdmin = members.some(m => m.userId === currentUserId && m.role === 'admin');
+  // ¿El usuario actual es el propietario? Solo él puede conceder/cambiar rol a admin.
+  const isOwner = members.some(m => m.userId === currentUserId && m.isOwner);
 
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,7 +141,7 @@ export default function ProjectDetailPage() {
                     onChange={e => updateRole.mutate({ memberId: m.userId, role: e.target.value })}
                     className="text-xs bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:border-blue-500"
                   >
-                    <option value="admin">Administrador</option>
+                    {isOwner && <option value="admin">Administrador</option>}
                     <option value="member">Miembro</option>
                     <option value="viewer">Observador</option>
                   </select>
@@ -199,13 +201,15 @@ export default function ProjectDetailPage() {
                   className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 transition"
                 >
                   <option value="member">Miembro — puede crear y editar tareas</option>
-                  <option value="admin">Administrador — control total del proyecto</option>
+                  {isOwner && (
+                    <option value="admin">Administrador — control total del proyecto</option>
+                  )}
                   <option value="viewer">Observador — solo lectura</option>
                 </select>
               </div>
               {invite.isError && (
                 <p className="text-sm text-red-400">
-                  No se pudo invitar. Verifica que el email esté registrado.
+                  No se pudo enviar la invitación. Verifica el email e intenta de nuevo.
                 </p>
               )}
               <div className="flex gap-2 justify-end">

@@ -80,6 +80,16 @@ export const projectService = {
   ): Promise<Project> {
     const project = await this.findById(projectId);
     assertAdmin(project, requesterId);
+
+    // Solo el propietario puede conceder el rol admin; los demás admins
+    // solo pueden invitar como member o viewer.
+    if (role === 'admin' && project.ownerId !== requesterId) {
+      throw Object.assign(
+        new Error('Solo el propietario puede invitar colaboradores con rol administrador'),
+        { statusCode: 403 }
+      );
+    }
+
     const normalizedEmail = email.toLowerCase();
 
     const user = await userRepository.findByEmail(normalizedEmail);
@@ -193,6 +203,14 @@ export const projectService = {
       );
     }
 
+    // Solo el propietario puede promover a otro miembro a administrador.
+    if (role === 'admin' && project.ownerId !== requesterId) {
+      throw Object.assign(
+        new Error('Solo el propietario puede asignar el rol administrador'),
+        { statusCode: 403 }
+      );
+    }
+
     const exists = project.members.some(m => m.userId === memberId);
     if (!exists) {
       throw Object.assign(new Error('El miembro no pertenece al proyecto'), { statusCode: 404 });
@@ -270,6 +288,27 @@ export const projectService = {
     const isMember = project.members.some(m => m.userId === userId);
     if (!isMember) {
       throw Object.assign(new Error('Acceso denegado: no eres miembro de este proyecto'), { statusCode: 403 });
+    }
+    return project;
+  },
+
+  /**
+   * Verifica membresía Y que el usuario NO sea solo observador (viewer).
+   * Usar en todos los endpoints de escritura: crear/editar/eliminar tareas,
+   * subtareas, comentarios, adjuntos, tableros y columnas.
+   * Los viewers solo tienen acceso de lectura.
+   */
+  async assertNotViewer(projectId: string, userId: string): Promise<Project> {
+    const project = await this.findById(projectId);
+    const member = project.members.find(m => m.userId === userId);
+    if (!member) {
+      throw Object.assign(new Error('Acceso denegado: no eres miembro de este proyecto'), { statusCode: 403 });
+    }
+    if (member.role === 'viewer') {
+      throw Object.assign(
+        new Error('Los observadores solo tienen acceso de lectura y no pueden realizar esta acción'),
+        { statusCode: 403 }
+      );
     }
     return project;
   },
