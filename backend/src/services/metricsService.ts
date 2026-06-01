@@ -60,8 +60,13 @@ export const metricsService = {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const days = last7Days();
 
-    // ── 1. Proyectos del usuario ───────────────────────
-    const projects = await projectRepository.findByOwner(userId);
+    // ── 1. Proyectos del usuario (owner + miembro) ────
+    const [owned, memberOf] = await Promise.all([
+      projectRepository.findByOwner(userId),
+      projectRepository.findByMember(userId),
+    ]);
+    const seen = new Set(owned.map(p => p.projectId));
+    const projects = [...owned, ...memberOf.filter(p => !seen.has(p.projectId))];
     const activeProjects = projects.filter(p => p.status === 'active');
 
     // ── 2. Tareas de todos los proyectos activos ───────

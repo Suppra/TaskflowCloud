@@ -1,11 +1,6 @@
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 
 interface StatusEntry {
@@ -17,37 +12,87 @@ interface Props {
   data: StatusEntry[];
 }
 
-export function TasksByStatusChart({ data }: Props) {
+function CustomTooltip({ active, payload, label }: {
+  active?: boolean;
+  payload?: { value: number }[];
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
   return (
-    <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
-      <h3 className="text-sm font-semibold text-gray-300 mb-4 uppercase tracking-wider">
-        Tareas por columna / estado
-      </h3>
-      {data.length === 0 ? (
-        <div className="flex items-center justify-center h-[180px] text-gray-500 text-sm">
-          Sin datos de estados
+    <div
+      className="rounded-xl px-3 py-2 text-xs shadow-xl"
+      style={{ background: '#1C1C1F', border: '1px solid #27272A' }}
+    >
+      <p style={{ color: '#A1A1AA' }} className="truncate max-w-[140px]">{label}</p>
+      <p className="font-bold tabular-nums mt-0.5" style={{ color: '#FAFAFA', fontFamily: "'JetBrains Mono', monospace" }}>
+        {payload[0].value} tareas
+      </p>
+    </div>
+  );
+}
+
+/* Shorten long column IDs to display name */
+function shortenStatus(s: string): string {
+  if (s.length < 12) return s;
+  return s.slice(0, 8) + '…';
+}
+
+export function TasksByStatusChart({ data }: Props) {
+  if (data.length === 0) {
+    return (
+      <div className="rounded-xl p-4" style={{ background: '#111113', border: '1px solid #1C1C1F' }}>
+        <h3 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#52525B' }}>
+          Tareas por columna
+        </h3>
+        <div
+          className="flex items-center justify-center text-xs font-medium"
+          style={{ height: 180, color: '#27272A' }}
+        >
+          Sin datos de columnas
         </div>
-      ) : (
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={data} layout="vertical" margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
-            <XAxis type="number" tick={{ fill: '#9CA3AF', fontSize: 12 }} allowDecimals={false} />
-            <YAxis
-              type="category"
-              dataKey="status"
-              tick={{ fill: '#9CA3AF', fontSize: 11 }}
-              width={100}
-            />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: 8 }}
-              labelStyle={{ color: '#F9FAFB' }}
-              itemStyle={{ color: '#D1D5DB' }}
-              cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-            />
-            <Bar dataKey="count" name="Tareas" fill="#6366F1" radius={[0, 4, 4, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      )}
+      </div>
+    );
+  }
+
+  /* Horizontal bar — safe with data present */
+  const chartData = data.map(d => ({ ...d, label: shortenStatus(d.status) }));
+  const barHeight = Math.max(180, chartData.length * 36);
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: '#111113', border: '1px solid #1C1C1F' }}>
+      <h3 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#52525B' }}>
+        Tareas por columna
+      </h3>
+      <ResponsiveContainer width="100%" height={barHeight}>
+        <BarChart
+          data={chartData}
+          layout="vertical"
+          margin={{ top: 0, right: 10, left: 8, bottom: 0 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="#1C1C1F" horizontal={false} />
+          <XAxis
+            type="number"
+            tick={{ fill: '#52525B', fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}
+            axisLine={false}
+            tickLine={false}
+            allowDecimals={false}
+          />
+          <YAxis
+            type="category"
+            dataKey="label"
+            tick={{ fill: '#71717A', fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            width={80}
+          />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+          <Bar dataKey="count" name="Tareas" radius={[0, 4, 4, 0]}>
+            {chartData.map((_, index) => (
+              <Cell key={index} fill="#6366F1" fillOpacity={0.7 + (index * 0.05)} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
