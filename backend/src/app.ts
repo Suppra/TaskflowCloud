@@ -106,10 +106,10 @@ httpServer.listen(PORT, () => {
   logger.info(`TaskFlow Backend corriendo en http://localhost:${PORT}`);
   logger.info(`  Entorno: ${env.NODE_ENV}`);
   logger.info(`  WebSockets: habilitados`);
-  if (env.ANTHROPIC_API_KEY) {
-    logger.info(`  IA (Claude): habilitada`);
+  if (env.GEMINI_API_KEY) {
+    logger.info(`  IA (Google Gemini): habilitada`);
   } else {
-    logger.info(`  IA (Claude): deshabilitada — configura ANTHROPIC_API_KEY para activar`);
+    logger.info(`  IA (Google Gemini): deshabilitada — configura GEMINI_API_KEY para activar (gratis en ai.google.dev)`);
   }
 });
 

@@ -53,8 +53,8 @@ resource "aws_ecs_task_definition" "backend" {
       { name = "MAX_TASKS_PER_MEMBER", value = tostring(var.max_tasks_per_member) },
       { name = "FRONTEND_URL", value = var.domain_name != "" ? "https://${var.domain_name}" : "http://localhost:5173" },
       { name = "CORS_ORIGINS", value = var.domain_name != "" ? "https://${var.domain_name}" : "http://localhost:5173" },
-      # IA — vacío deshabilita la feature sin romper el servidor
-      { name = "ANTHROPIC_API_KEY", value = var.anthropic_api_key },
+      # IA (Google Gemini, gratis) — vacío deshabilita la feature sin romper el servidor
+      { name = "GEMINI_API_KEY", value = var.gemini_api_key },
     ]
 
     # Secretos inyectados desde Secrets Manager (nunca en texto plano)

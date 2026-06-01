@@ -108,8 +108,8 @@ variable "log_retention_days" {
   default     = 30
 }
 
-variable "anthropic_api_key" {
-  description = "API Key de Anthropic para la feature de generación de tareas con IA. Dejar vacío para deshabilitar la feature."
+variable "gemini_api_key" {
+  description = "API Key de Google Gemini para la feature de generación de tareas con IA. Completamente gratis en https://ai.google.dev. Dejar vacío para deshabilitar la feature."
   type        = string
   default     = ""
   sensitive   = true
