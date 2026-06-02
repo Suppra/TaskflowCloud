@@ -2,6 +2,7 @@ import { QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamoDB } from '../config/aws';
 import { projectRepository } from '../repositories/projectRepository';
 import { taskRepository } from '../repositories/taskRepository';
+import { boardService } from './boardService';
 
 const ALERTS_TABLE = 'taskflow-alerts';
 
@@ -70,10 +71,17 @@ export const metricsService = {
     const activeProjects = projects.filter(p => p.status === 'active');
 
     // ── 2. Tareas de todos los proyectos activos ───────
-    const allTasksNested = await Promise.all(
-      activeProjects.map(p => taskRepository.findByProject(p.projectId))
-    );
+    const [allTasksNested, allBoardsNested] = await Promise.all([
+      Promise.all(activeProjects.map(p => taskRepository.findByProject(p.projectId))),
+      Promise.all(activeProjects.map(p => boardService.findByProject(p.projectId))),
+    ]);
     const allTasks = allTasksNested.flat();
+
+    // Mapa columnId → nombre legible (ej. "Por hacer", "En progreso")
+    const columnNameMap = new Map<string, string>();
+    allBoardsNested.flat().forEach(board => {
+      board.columns.forEach(col => columnNameMap.set(col.columnId, col.name));
+    });
 
     const completedTasks  = allTasks.filter(t => !!t.completedAt);
     const openTasks       = allTasks.filter(t => !t.completedAt);
@@ -90,10 +98,12 @@ export const metricsService = {
       color: PRIORITY_COLORS[priority],
     }));
 
-    // ── 4. Por estado (columna) ────────────────────────
+    // ── 4. Por estado (nombre de columna, no UUID) ─────
     const statusMap = new Map<string, number>();
     allTasks.forEach(t => {
-      const key = t.status || t.columnId || 'Sin estado';
+      // Resolver el nombre real de la columna desde el mapa; fallback al ID truncado
+      const colId = t.columnId || t.status || '';
+      const key   = columnNameMap.get(colId) ?? (colId ? colId.slice(0, 8) + '…' : 'Sin estado');
       statusMap.set(key, (statusMap.get(key) ?? 0) + 1);
     });
     const byStatus = Array.from(statusMap.entries()).map(([status, count]) => ({ status, count }));

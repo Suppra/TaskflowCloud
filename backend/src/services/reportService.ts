@@ -181,8 +181,8 @@ export const reportService = {
     await projectService.assertMember(report.projectId, requesterId);
 
     if (isDevMode()) {
-      // URL relativa al backend — el controlador servirá el archivo directamente
-      return `/api/v1/reports/${reportId}/file`;
+      // URL relativa SIN el prefijo /api/v1 — el axios del frontend lo añade automáticamente
+      return `/reports/${reportId}/file`;
     }
 
     const command = new GetObjectCommand({
