@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reportService } from '@/services/reportService';
+export { useDeleteReport } from './useDeleteReport';
 
 export const useReports = (projectId: string) =>
   useQuery({

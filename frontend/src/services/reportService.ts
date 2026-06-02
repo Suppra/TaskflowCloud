@@ -13,4 +13,7 @@ export const reportService = {
   getDownloadUrl: (reportId: string) =>
     api.get<{ success: boolean; data: { url: string; expiresIn: number } }>(`/reports/${reportId}/download`)
       .then(r => r.data.data!),
+
+  deleteReport: (reportId: string) =>
+    api.delete(`/reports/${reportId}`).then(() => {}),
 };

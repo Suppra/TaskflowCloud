@@ -12,6 +12,7 @@ router.use(authenticate);
 router.get('/projects/:projectId', reportController.list);
 router.post('/projects/:projectId', reportController.generate);
 router.get('/:reportId/download', reportController.download);
+router.delete('/:reportId', reportController.deleteReport);
 router.get('/:reportId/file', reportController.serveFile);
 
 export default router;

@@ -32,6 +32,11 @@ export const reportController = {
     return sendSuccess(res, { url, expiresIn: 900 });
   }),
 
+  deleteReport: asyncHandler(async (req: AuthRequest, res: Response) => {
+    await reportService.deleteReport(req.params.reportId, req.user!.userId);
+    return sendSuccess(res, null, 'Reporte eliminado correctamente');
+  }),
+
   // Solo en desarrollo: sirve el archivo directamente desde disco
   serveFile: asyncHandler(async (req: AuthRequest, res: Response) => {
     const { buffer, type, projectName } = await reportService.streamLocalFile(
