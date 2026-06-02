@@ -63,8 +63,10 @@ export function TaskCard({ task, members = [], isDragging = false }: Props) {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!dragStartPos.current) return;
-    if (Math.abs(e.clientX - dragStartPos.current.x) > 5 ||
-        Math.abs(e.clientY - dragStartPos.current.y) > 5) {
+    // Umbral igual al activationConstraint.distance del sensor (3px)
+    // para que click y drag tengan criterio consistente
+    if (Math.abs(e.clientX - dragStartPos.current.x) > 3 ||
+        Math.abs(e.clientY - dragStartPos.current.y) > 3) {
       wasDragged.current = true;
     }
   };

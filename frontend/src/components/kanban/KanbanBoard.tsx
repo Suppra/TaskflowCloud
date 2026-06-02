@@ -80,7 +80,8 @@ export function KanbanBoard({ board, projectId, projectName = '', projectDescrip
     return true;
   });
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  // distance: 3px — el drag se activa rápido sin interferir con clicks normales
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 3 } }));
 
   const getTasksByColumn = useCallback(
     (columnId: string) => filteredTasks.filter(t => t.columnId === columnId).sort((a, b) => a.order - b.order),
@@ -94,8 +95,16 @@ export function KanbanBoard({ board, projectId, projectName = '', projectDescrip
 
   const handleDragOver = ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) => {
     if (!over || active.id === over.id) return;
+
+    // Caso 1: arrastrando sobre el área vacía de una columna
     const overColumn = board.columns.find(c => c.columnId === over.id);
-    if (overColumn) setPendingColumnId(overColumn.columnId);
+    if (overColumn) { setPendingColumnId(overColumn.columnId); return; }
+
+    // Caso 2: arrastrando sobre una TAREA — detectar su columna
+    // Esto es fundamental cuando la columna destino ya tiene tarjetas:
+    // over.id es el taskId de la tarjeta bajo el puntero, no el columnId.
+    const overTask = tasks.find(t => t.taskId === over.id);
+    if (overTask) setPendingColumnId(overTask.columnId);
   };
 
   // Columna de mayor order = columna de completado; primera = columna inicial

@@ -31,4 +31,18 @@ export const reportController = {
     const url = await reportService.getDownloadUrl(req.params.reportId, req.user!.userId);
     return sendSuccess(res, { url, expiresIn: 900 });
   }),
+
+  // Solo en desarrollo: sirve el archivo directamente desde disco
+  serveFile: asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { buffer, type, projectName } = await reportService.streamLocalFile(
+      req.params.reportId,
+      req.user!.userId
+    );
+    const contentType = type === 'pdf' ? 'application/pdf' : 'text/csv';
+    const filename    = `reporte-${projectName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.${type}`;
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  }),
 };

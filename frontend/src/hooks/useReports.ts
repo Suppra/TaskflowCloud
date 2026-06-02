@@ -20,7 +20,22 @@ export const useDownloadReport = () =>
   useMutation({
     mutationFn: async (reportId: string) => {
       const { url } = await reportService.getDownloadUrl(reportId);
-      // Abrir en nueva pestaña para iniciar descarga
-      window.open(url, '_blank');
+
+      if (url.startsWith('/') || url.startsWith('http://localhost')) {
+        // Dev: URL relativa al backend → fetch con auth header y crear blob
+        const { api } = await import('@/services/api');
+        const response = await api.get<Blob>(url, { responseType: 'blob' });
+        const blobUrl = URL.createObjectURL(response.data);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = 'reporte';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+      } else {
+        // Prod: S3 presigned URL → abrir directamente en nueva pestaña
+        window.open(url, '_blank', 'noopener');
+      }
     },
   });

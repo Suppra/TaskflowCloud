@@ -1,9 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { createObjectCsvStringifier } from 'csv-writer';
 import PDFDocument from 'pdfkit';
+import { writeFile, mkdir } from 'fs/promises';
+import { existsSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { s3 } from '../config/aws';
 import { env } from '../config/env';
 import { reportRepository } from '../repositories/reportRepository';
@@ -11,6 +14,14 @@ import { taskRepository } from '../repositories/taskRepository';
 import { projectService } from './projectService';
 import { Report } from '../types';
 import { logger } from '../config/logger';
+
+// ── Directorio local para reportes en modo desarrollo ──────────────────────────
+const LOCAL_DIR = join(tmpdir(), 'taskflow-reports');
+const isDevMode = () => env.NODE_ENV === 'development' || !!env.DYNAMODB_ENDPOINT;
+
+async function ensureLocalDir() {
+  if (!existsSync(LOCAL_DIR)) await mkdir(LOCAL_DIR, { recursive: true });
+}
 
 async function buildCsvBuffer(projectId: string): Promise<Buffer> {
   const tasks = await taskRepository.findByProject(projectId);
@@ -125,32 +136,33 @@ export const reportService = {
     type: 'pdf' | 'csv',
     requesterId: string
   ): Promise<Report> {
-    // Verifica membresía y obtiene el proyecto para el nombre
     const project = await projectService.assertMember(projectId, requesterId);
 
-    const reportId = uuidv4();
-    const ext = type === 'pdf' ? 'pdf' : 'csv';
-    const s3Key = `reports/${projectId}/${reportId}.${ext}`;
+    const reportId  = uuidv4();
+    const ext       = type === 'pdf' ? 'pdf' : 'csv';
+    const s3Key     = `reports/${projectId}/${reportId}.${ext}`;
     const contentType = type === 'pdf' ? 'application/pdf' : 'text/csv';
 
-    // Generar buffer según tipo
     const buffer = type === 'pdf'
       ? await buildPdfBuffer(projectId, project.name)
       : await buildCsvBuffer(projectId);
 
-    // Subir a S3
-    await s3.send(
-      new PutObjectCommand({
+    if (isDevMode()) {
+      // ── Desarrollo: guardar en disco local (no hay S3) ──────────────────
+      await ensureLocalDir();
+      await writeFile(join(LOCAL_DIR, `${reportId}.${ext}`), buffer);
+      logger.info({ message: 'Reporte guardado localmente (dev)', reportId, localDir: LOCAL_DIR });
+    } else {
+      // ── Producción: subir a S3 ──────────────────────────────────────────
+      await s3.send(new PutObjectCommand({
         Bucket: env.S3_BUCKET_REPORTS,
         Key: s3Key,
         Body: buffer,
         ContentType: contentType,
-      })
-    );
+      }));
+      logger.info({ message: 'Reporte subido a S3', reportId, s3Key });
+    }
 
-    logger.info({ message: 'Report uploaded to S3', reportId, s3Key, projectId });
-
-    // Persistir en DynamoDB
     const report: Report = {
       reportId,
       projectId,
@@ -166,17 +178,40 @@ export const reportService = {
   async getDownloadUrl(reportId: string, requesterId: string): Promise<string> {
     const report = await reportRepository.findById(reportId);
     if (!report) throw Object.assign(new Error('Reporte no encontrado'), { statusCode: 404 });
-
-    // Verifica membresía
     await projectService.assertMember(report.projectId, requesterId);
+
+    if (isDevMode()) {
+      // URL relativa al backend — el controlador servirá el archivo directamente
+      return `/api/v1/reports/${reportId}/file`;
+    }
 
     const command = new GetObjectCommand({
       Bucket: env.S3_BUCKET_REPORTS,
       Key: report.s3Key,
     });
-
-    // URL válida por 15 minutos
     return getSignedUrl(s3, command, { expiresIn: 900 });
+  },
+
+  /**
+   * Sirve el archivo del reporte directamente desde el disco local (solo dev).
+   * En producción la descarga va por S3 presigned URL.
+   */
+  async streamLocalFile(
+    reportId: string,
+    requesterId: string
+  ): Promise<{ buffer: Buffer; type: 'pdf' | 'csv'; projectName: string }> {
+    const report = await reportRepository.findById(reportId);
+    if (!report) throw Object.assign(new Error('Reporte no encontrado'), { statusCode: 404 });
+    await projectService.assertMember(report.projectId, requesterId);
+
+    const project = await projectService.findById(report.projectId);
+    const ext  = report.type === 'pdf' ? 'pdf' : 'csv';
+    const path = join(LOCAL_DIR, `${reportId}.${ext}`);
+
+    const { readFile } = await import('fs/promises');
+    const buffer = await readFile(path);
+
+    return { buffer, type: report.type, projectName: project.name };
   },
 
   async listByProject(projectId: string, requesterId: string): Promise<Report[]> {
