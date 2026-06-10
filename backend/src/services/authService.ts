@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { userRepository } from '../repositories/userRepository';
 import { projectService } from './projectService';
+import { emailSubscriptionService } from './emailSubscriptionService';
 import { env } from '../config/env';
 import { User, JwtPayload } from '../types';
 import { RegisterInput, LoginInput } from '../validators/auth';
@@ -46,6 +47,10 @@ export const authService = {
     };
 
     await userRepository.create(user);
+
+    // En Learner Lab usamos SNS email subscription con confirmacion por correo.
+    // El usuario debe confirmar para empezar a recibir emails reales.
+    await emailSubscriptionService.ensureSubscribed(user.email);
 
     // Automatización: si fue invitado a proyectos antes de registrarse,
     // se le agrega automáticamente como miembro al crear su cuenta.

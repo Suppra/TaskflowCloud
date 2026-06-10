@@ -7,14 +7,9 @@ output "alb_dns_name" {
   value       = aws_lb.main.dns_name
 }
 
-output "api_url" {
-  description = "URL base del API"
-  value       = var.create_route53 && var.domain_name != "" ? "https://api.${var.domain_name}/api/v1" : "http://${aws_lb.main.dns_name}/api/v1"
-}
-
-output "frontend_url" {
-  description = "URL del frontend (CloudFront)"
-  value       = var.create_route53 && var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.frontend.domain_name}"
+output "app_url" {
+  description = "URL pública de la aplicación en ALB"
+  value       = "http://${aws_lb.main.dns_name}"
 }
 
 output "ecr_repository_url" {
@@ -22,19 +17,14 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.backend.repository_url
 }
 
-output "frontend_bucket" {
-  description = "Bucket S3 donde subir el build del frontend (aws s3 sync)"
-  value       = aws_s3_bucket.frontend.bucket
-}
-
-output "cloudfront_distribution_id" {
-  description = "ID de la distribución CloudFront (para invalidaciones tras deploy)"
-  value       = aws_cloudfront_distribution.frontend.id
-}
-
 output "sqs_queue_url" {
   description = "URL de la cola de eventos SQS"
   value       = aws_sqs_queue.events.url
+}
+
+output "user_notifications_topic_arn" {
+  description = "ARN del topic SNS para correos transaccionales por suscripcion"
+  value       = aws_sns_topic.user_notifications.arn
 }
 
 output "ecs_cluster_name" {

@@ -59,16 +59,18 @@ locals {
   lambda_env = {
     AWS_NODEJS_CONNECTION_REUSE_ENABLED = "1"
     SES_FROM_EMAIL                      = var.ses_from_email
+    SES_ENABLED                         = tostring(var.ses_enabled)
+    USER_NOTIFICATIONS_TOPIC_ARN        = aws_sns_topic.user_notifications.arn
     SQS_QUEUE_URL                       = aws_sqs_queue.events.url
     S3_BUCKET_REPORTS                   = aws_s3_bucket.reports.bucket
-    FRONTEND_URL                        = var.domain_name != "" ? "https://${var.domain_name}" : "http://localhost:5173"
+    FRONTEND_URL                        = "http://${aws_lb.main.dns_name}"
   }
 }
 
 # ── 1) notifications: consume SQS → SES + DynamoDB ───────────────────────────
 resource "aws_lambda_function" "notifications" {
   function_name    = "${local.name_prefix}-notifications"
-  role             = aws_iam_role.lambda.arn
+  role             = data.aws_iam_role.lab.arn
   runtime          = local.lambda_runtime
   handler          = "index.handler"
   filename         = data.archive_file.notifications.output_path
@@ -90,7 +92,7 @@ resource "aws_lambda_event_source_mapping" "notifications_sqs" {
 # ── 2) overdue-tasks: cron horario → marca vencidas → notifica ───────────────
 resource "aws_lambda_function" "overdue_tasks" {
   function_name    = "${local.name_prefix}-overdue-tasks"
-  role             = aws_iam_role.lambda.arn
+  role             = data.aws_iam_role.lab.arn
   runtime          = local.lambda_runtime
   handler          = "index.handler"
   filename         = data.archive_file.overdue_tasks.output_path
@@ -104,7 +106,7 @@ resource "aws_lambda_function" "overdue_tasks" {
 # ── 3) alerts-engine: cron → detecta proyectos en riesgo (>30% vencidas) ─────
 resource "aws_lambda_function" "alerts_engine" {
   function_name    = "${local.name_prefix}-alerts-engine"
-  role             = aws_iam_role.lambda.arn
+  role             = data.aws_iam_role.lab.arn
   runtime          = local.lambda_runtime
   handler          = "index.handler"
   filename         = data.archive_file.alerts_engine.output_path
@@ -118,7 +120,7 @@ resource "aws_lambda_function" "alerts_engine" {
 # ── 4) scheduled-reports: cron diario/semanal → genera reportes → S3 ─────────
 resource "aws_lambda_function" "scheduled_reports" {
   function_name    = "${local.name_prefix}-scheduled-reports"
-  role             = aws_iam_role.lambda.arn
+  role             = data.aws_iam_role.lab.arn
   runtime          = local.lambda_runtime
   handler          = "index.handler"
   filename         = data.archive_file.scheduled_reports.output_path

@@ -15,12 +15,15 @@ const { DynamoDBDocumentClient, ScanCommand, PutCommand, GetCommand, QueryComman
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl }     = require('@aws-sdk/s3-request-presigner');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 const PDFDocument          = require('pdfkit');
 const { randomUUID }       = require('crypto');
 
 const region        = process.env.AWS_REGION        ?? 'us-east-1';
 const reportsBucket = process.env.S3_BUCKET_REPORTS  ?? 'taskflow-reports-dev';
 const fromEmail     = process.env.SES_FROM_EMAIL     ?? 'noreply@taskflow.dev';
+const sesEnabled    = (process.env.SES_ENABLED ?? 'true').toLowerCase() === 'true';
+const userNotificationsTopicArn = process.env.USER_NOTIFICATIONS_TOPIC_ARN ?? '';
 const frontendUrl   = process.env.FRONTEND_URL       ?? 'https://taskflow.dev';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {
@@ -28,6 +31,7 @@ const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {
 });
 const s3  = new S3Client({ region });
 const ses = new SESClient({ region });
+const sns = new SNSClient({ region });
 
 // ── Helpers DynamoDB ───────────────────────────────────────────────────────
 
@@ -197,6 +201,25 @@ async function getPresignedUrl(key, hours = 24) {
 // ── Email al creador ────────────────────────────────────────────────────────
 
 async function sendReportEmail(creatorEmail, creatorName, projectName, csvUrl, pdfUrl) {
+  if (!sesEnabled) {
+    if (!userNotificationsTopicArn) {
+      console.log('[scheduled-reports] SES disabled and no USER_NOTIFICATIONS_TOPIC_ARN, skipping email');
+      return;
+    }
+
+    const plain = `Hola ${creatorName}, el reporte semanal de ${projectName} esta listo. CSV: ${csvUrl} PDF: ${pdfUrl}`;
+    await sns.send(new PublishCommand({
+      TopicArn: userNotificationsTopicArn,
+      Subject: `[TaskFlow] Reporte semanal: ${projectName}`.slice(0, 100),
+      Message: plain,
+      MessageAttributes: {
+        recipient: { DataType: 'String', StringValue: creatorEmail },
+      },
+    }));
+    console.log('[scheduled-reports] Email published via SNS to recipient filter');
+    return;
+  }
+
   const html = `
     <html><body style="font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;padding:20px">
     <div style="background:#1e293b;border-radius:12px;padding:24px;max-width:560px;margin:auto">

@@ -48,20 +48,5 @@ provider "aws" {
   }
 }
 
-# Provider adicional para CloudFront/ACM (los certificados de CloudFront
-# DEBEN estar en us-east-1, independientemente de la región principal).
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
-
-  default_tags {
-    tags = {
-      Project     = "TaskFlow-Cloud"
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-    }
-  }
-}
-
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}

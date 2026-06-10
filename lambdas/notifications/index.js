@@ -11,16 +11,20 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 const { randomUUID } = require('crypto');
 
 const region  = process.env.AWS_REGION  ?? 'us-east-1';
 const fromEmail = process.env.SES_FROM_EMAIL ?? 'noreply@taskflow.dev';
+const sesEnabled = (process.env.SES_ENABLED ?? 'true').toLowerCase() === 'true';
+const userNotificationsTopicArn = process.env.USER_NOTIFICATIONS_TOPIC_ARN ?? '';
 const frontendUrl = process.env.FRONTEND_URL ?? 'https://taskflow.dev';
 const notificationsTable = 'taskflow-notifications';
 const usersTable = 'taskflow-users';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
 const ses = new SESClient({ region });
+const sns = new SNSClient({ region });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -46,6 +50,25 @@ async function saveNotification(userId, type, title, message, data = {}) {
 }
 
 async function sendEmail(toEmail, subject, htmlBody) {
+  if (!sesEnabled) {
+    if (!userNotificationsTopicArn) {
+      console.log('[notifications] SES disabled and no USER_NOTIFICATIONS_TOPIC_ARN, skipping email');
+      return;
+    }
+
+    const plainText = htmlBody.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    await sns.send(new PublishCommand({
+      TopicArn: userNotificationsTopicArn,
+      Subject: subject.slice(0, 100),
+      Message: plainText,
+      MessageAttributes: {
+        recipient: { DataType: 'String', StringValue: toEmail },
+      },
+    }));
+    console.log('[notifications] Email published via SNS to recipient filter');
+    return;
+  }
+
   try {
     await ses.send(new SendEmailCommand({
       Source: `TaskFlow Cloud <${fromEmail}>`,

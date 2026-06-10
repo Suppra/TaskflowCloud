@@ -27,8 +27,8 @@ resource "aws_ecs_task_definition" "backend" {
   network_mode             = "awsvpc"
   cpu                      = var.backend_cpu
   memory                   = var.backend_memory
-  execution_role_arn       = aws_iam_role.ecs_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task.arn
+  execution_role_arn       = data.aws_iam_role.lab.arn
+  task_role_arn            = data.aws_iam_role.lab.arn
 
   container_definitions = jsonencode([{
     name      = "backend"
@@ -47,12 +47,13 @@ resource "aws_ecs_task_definition" "backend" {
       { name = "S3_BUCKET_ATTACHMENTS", value = aws_s3_bucket.attachments.bucket },
       { name = "S3_BUCKET_REPORTS", value = aws_s3_bucket.reports.bucket },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.events.url },
+      { name = "USER_NOTIFICATIONS_TOPIC_ARN", value = aws_sns_topic.user_notifications.arn },
       { name = "SES_FROM_EMAIL", value = var.ses_from_email },
       { name = "JWT_EXPIRES_IN", value = var.jwt_expires_in },
       { name = "JWT_REFRESH_EXPIRES_IN", value = var.jwt_refresh_expires_in },
       { name = "MAX_TASKS_PER_MEMBER", value = tostring(var.max_tasks_per_member) },
-      { name = "FRONTEND_URL", value = var.domain_name != "" ? "https://${var.domain_name}" : "http://localhost:5173" },
-      { name = "CORS_ORIGINS", value = var.domain_name != "" ? "https://${var.domain_name}" : "http://localhost:5173" },
+      { name = "FRONTEND_URL", value = "http://${aws_lb.main.dns_name}" },
+      { name = "CORS_ORIGINS", value = "http://${aws_lb.main.dns_name}" },
     ]
 
     # Secretos inyectados desde Secrets Manager (nunca en texto plano).
@@ -95,9 +96,9 @@ resource "aws_ecs_service" "backend" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   load_balancer {

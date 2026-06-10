@@ -22,19 +22,11 @@ resource "aws_sqs_queue" "events" {
   tags = { Name = "${local.name_prefix}-events" }
 }
 
+# Topic SNS para emails transaccionales a usuarios finales.
+# Cada usuario se suscribe con filtro por atributo `recipient` (su email).
+resource "aws_sns_topic" "user_notifications" {
+  name = "${local.name_prefix}-user-notifications"
+}
+
 # ── SES ──────────────────────────────────────────────────────────────────────
-# Verifica el dominio si está configurado; de lo contrario, verifica el email.
-resource "aws_ses_email_identity" "from" {
-  count = var.domain_name == "" ? 1 : 0
-  email = var.ses_from_email
-}
-
-resource "aws_ses_domain_identity" "main" {
-  count  = var.domain_name != "" ? 1 : 0
-  domain = var.domain_name
-}
-
-resource "aws_ses_domain_dkim" "main" {
-  count  = var.domain_name != "" ? 1 : 0
-  domain = aws_ses_domain_identity.main[0].domain
-}
+# En Learner Lab, la verificación de identidad puede requerir hacerlo manualmente.

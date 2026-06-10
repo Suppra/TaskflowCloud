@@ -19,6 +19,7 @@ const envSchema = z.object({
   S3_BUCKET_ATTACHMENTS: z.string().default('taskflow-attachments-dev'),
   S3_BUCKET_REPORTS: z.string().default('taskflow-reports-dev'),
   SQS_QUEUE_URL: z.string().optional(),
+  USER_NOTIFICATIONS_TOPIC_ARN: z.string().optional(),
   SES_FROM_EMAIL: z.string().email().default('noreply@taskflow.dev'),
 
   FRONTEND_URL: z.string().default('http://localhost:5173'),

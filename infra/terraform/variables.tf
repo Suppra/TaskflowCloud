@@ -64,24 +64,17 @@ variable "backend_port" {
   default     = 3001
 }
 
-# ── DNS / Dominio (opcional) ─────────────────────────────────────────────────
-variable "domain_name" {
-  description = "Dominio raíz gestionado en Route53. Déjalo vacío para omitir DNS/ACM."
-  type        = string
-  default     = ""
-}
-
-variable "create_route53" {
-  description = "Si crear registros Route53 + certificados ACM"
-  type        = bool
-  default     = false
-}
-
 # ── Aplicación ───────────────────────────────────────────────────────────────
 variable "ses_from_email" {
   description = "Email verificado en SES usado como remitente"
   type        = string
   default     = "noreply@taskflow.dev"
+}
+
+variable "ses_enabled" {
+  description = "Habilita envio real de emails por SES en Lambdas. En Learner Lab suele ir en false por restricciones sandbox/permisos."
+  type        = bool
+  default     = false
 }
 
 variable "jwt_expires_in" {

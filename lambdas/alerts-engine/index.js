@@ -14,11 +14,14 @@ const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, ScanCommand, QueryCommand, PutCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 const { randomUUID } = require('crypto');
 
 const region    = process.env.AWS_REGION     ?? 'us-east-1';
 const queueUrl  = process.env.SQS_QUEUE_URL;
 const fromEmail = process.env.SES_FROM_EMAIL ?? 'noreply@taskflow.dev';
+const sesEnabled = (process.env.SES_ENABLED ?? 'true').toLowerCase() === 'true';
+const userNotificationsTopicArn = process.env.USER_NOTIFICATIONS_TOPIC_ARN ?? '';
 const frontendUrl = process.env.FRONTEND_URL ?? 'https://taskflow.dev';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {
@@ -26,6 +29,7 @@ const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {
 });
 const sqs = new SQSClient({ region });
 const ses = new SESClient({ region });
+const sns = new SNSClient({ region });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -123,6 +127,25 @@ async function notifyAdmins(project, alertMessage, severity) {
     }));
 
     // Email
+    if (!sesEnabled) {
+      if (!userNotificationsTopicArn) {
+        console.log('[alerts-engine] SES disabled and no USER_NOTIFICATIONS_TOPIC_ARN, skipping email');
+        continue;
+      }
+
+      const plain = `Alerta ${severity.toUpperCase()} en ${project.name}: ${alertMessage} Revisar ${frontendUrl}/projects/${project.projectId}`;
+      await sns.send(new PublishCommand({
+        TopicArn: userNotificationsTopicArn,
+        Subject: `[TaskFlow] Alerta ${severity.toUpperCase()}: ${project.name}`.slice(0, 100),
+        Message: plain,
+        MessageAttributes: {
+          recipient: { DataType: 'String', StringValue: user.email },
+        },
+      }));
+      console.log('[alerts-engine] Email published via SNS to recipient filter');
+      continue;
+    }
+
     try {
       await ses.send(new SendEmailCommand({
         Source: `TaskFlow Cloud <${fromEmail}>`,

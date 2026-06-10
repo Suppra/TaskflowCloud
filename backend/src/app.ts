@@ -1,4 +1,5 @@
 import { createServer } from 'http';
+import path from 'path';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -22,7 +23,19 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ── Seguridad ──────────────────────────────────────────────
-app.use(helmet());
+app.use(
+  helmet({
+    // En Learner Lab el entrypoint actual es ALB HTTP (sin 443).
+    // Evitamos que el navegador fuerce HTTPS y rompa la carga del SPA.
+    hsts: false,
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        upgradeInsecureRequests: null,
+      },
+    },
+  })
+);
 app.use(
   cors({
     origin: env.CORS_ORIGINS.split(',').map(o => o.trim()),
@@ -98,6 +111,15 @@ app.get('/api/v1/docs.json', (_req, res) => {
 
 // ── Rutas ──────────────────────────────────────────────────
 app.use('/api/v1', router);
+
+const publicDir = path.join(__dirname, '..', 'public');
+app.use(express.static(publicDir));
+
+// Fallback SPA para rutas no-API.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
 
 // ── Error handling ─────────────────────────────────────────
 app.use(notFound);
