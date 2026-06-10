@@ -5,7 +5,7 @@
  * Función : Por cada proyecto activo:
  *           1. Genera reporte CSV  → sube a S3 → guarda en DynamoDB
  *           2. Genera reporte PDF  → sube a S3 → guarda en DynamoDB
- *           3. Envía email al CREADOR del proyecto con ambos enlaces
+ *           3. Envía email y notificación in-app al creador y miembros
  * ──────────────────────────────────────────────────────────────────────────
  * HU-18: Recibir reportes automáticos semanales en CSV y PDF
  */
@@ -198,22 +198,22 @@ async function getPresignedUrl(key, hours = 24) {
   );
 }
 
-// ── Email al creador ────────────────────────────────────────────────────────
+// ── Email para miembros del proyecto ────────────────────────────────────────
 
-async function sendReportEmail(creatorEmail, creatorName, projectName, csvUrl, pdfUrl) {
+async function sendReportEmail(recipientEmail, recipientName, projectName, csvUrl, pdfUrl) {
   if (!sesEnabled) {
     if (!userNotificationsTopicArn) {
       console.log('[scheduled-reports] SES disabled and no USER_NOTIFICATIONS_TOPIC_ARN, skipping email');
       return;
     }
 
-    const plain = `Hola ${creatorName}, el reporte semanal de ${projectName} esta listo. CSV: ${csvUrl} PDF: ${pdfUrl}`;
+    const plain = `Hola ${recipientName}, el reporte semanal de ${projectName} esta listo. CSV: ${csvUrl} PDF: ${pdfUrl}`;
     await sns.send(new PublishCommand({
       TopicArn: userNotificationsTopicArn,
       Subject: `[TaskFlow] Reporte semanal: ${projectName}`.slice(0, 100),
       Message: plain,
       MessageAttributes: {
-        recipient: { DataType: 'String', StringValue: creatorEmail },
+        recipient: { DataType: 'String', StringValue: recipientEmail },
       },
     }));
     console.log('[scheduled-reports] Email published via SNS to recipient filter');
@@ -225,7 +225,7 @@ async function sendReportEmail(creatorEmail, creatorName, projectName, csvUrl, p
     <div style="background:#1e293b;border-radius:12px;padding:24px;max-width:560px;margin:auto">
       <div style="color:#6366f1;font-size:22px;font-weight:bold;margin-bottom:16px">TaskFlow Cloud</div>
       <h2 style="margin:0 0 12px">Reporte semanal disponible</h2>
-      <p>Hola <strong>${creatorName}</strong>,</p>
+      <p>Hola <strong>${recipientName}</strong>,</p>
       <p>El reporte semanal del proyecto <strong>${projectName}</strong> está listo.</p>
       <div style="margin:20px 0;display:flex;gap:12px;flex-wrap:wrap">
         <a href="${csvUrl}"
@@ -243,20 +243,20 @@ async function sendReportEmail(creatorEmail, creatorName, projectName, csvUrl, p
       </a>
       <p style="color:#475569;font-size:12px;margin-top:20px">
         Los enlaces de descarga expiran en 24 horas.<br>
-        Recibes este email como creador del proyecto.
+        Recibes este email por ser miembro del proyecto.
       </p>
     </div></body></html>`;
 
   try {
     await ses.send(new SendEmailCommand({
       Source: `TaskFlow Cloud <${fromEmail}>`,
-      Destination: { ToAddresses: [creatorEmail] },
+      Destination: { ToAddresses: [recipientEmail] },
       Message: {
         Subject: { Data: `[TaskFlow] Reporte semanal: ${projectName}`, Charset: 'UTF-8' },
         Body: { Html: { Charset: 'UTF-8', Data: html } },
       },
     }));
-    console.log(`[scheduled-reports] Email enviado a ${creatorEmail}`);
+    console.log(`[scheduled-reports] Email enviado a ${recipientEmail}`);
   } catch (err) {
     console.error('[scheduled-reports] SES error:', err.message);
   }
@@ -300,15 +300,15 @@ exports.handler = async () => {
       await saveReport(pdfId, project.projectId, 'pdf', pdfKey);
       const pdfUrl = await getPresignedUrl(pdfKey, 24);
 
-      // ── Notificar y enviar email SOLO al creador del proyecto ──────────
-      const creator = await getUserById(project.ownerId);
-      if (creator) {
-        // Notificación en plataforma (CSV)
-        await saveNotification(creator.userId, project.projectId, project.name, csvId, 'csv');
-        // Notificación en plataforma (PDF)
-        await saveNotification(creator.userId, project.projectId, project.name, pdfId, 'pdf');
-        // Email con ambos enlaces
-        await sendReportEmail(creator.email, creator.name, project.name, csvUrl, pdfUrl);
+      // ── Notificar y enviar email al creador y todos los miembros ───────
+      const memberIds = [...new Set((project.members ?? []).map(m => m.userId))];
+      const recipientsRaw = await Promise.all(memberIds.map((memberId) => getUserById(memberId)));
+      const recipients = recipientsRaw.filter((u) => !!u && !!u.email);
+
+      for (const recipient of recipients) {
+        await saveNotification(recipient.userId, project.projectId, project.name, csvId, 'csv');
+        await saveNotification(recipient.userId, project.projectId, project.name, pdfId, 'pdf');
+        await sendReportEmail(recipient.email, recipient.name, project.name, csvUrl, pdfUrl);
       }
 
       console.log(`[scheduled-reports] OK: ${project.projectId} — csv:${csvId} pdf:${pdfId}`);

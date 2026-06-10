@@ -106,114 +106,195 @@ function emailWrapper(content) {
   </html>`;
 }
 
-// ── Handlers por tipo de evento ────────────────────────────────────────────
+const arrayUnique = (arr) => [...new Set(arr.filter(Boolean))];
 
-async function handleTaskCreated(payload) {
-  const { taskId, projectId, assigneeId, reporterId, taskTitle = 'Nueva tarea' } = payload;
-  if (!assigneeId || assigneeId === reporterId) return; // sin asignación o auto-asignado
+function resolveRecipientIds(payload = {}) {
+  const fromList = Array.isArray(payload.recipientUserIds) ? payload.recipientUserIds : [];
+  const fallback = [payload.assigneeId, payload.userId, payload.taskOwnerId, payload.invitedUserId, payload.reporterId];
 
-  const [assignee, reporter] = await Promise.all([
-    getUserById(assigneeId),
-    getUserById(reporterId),
-  ]);
-  if (!assignee) return;
-
-  await saveNotification(
-    assigneeId,
-    'task_assigned',
-    'Te asignaron una tarea',
-    `${reporter?.name ?? 'Alguien'} te asignó la tarea: "${taskTitle}"`,
-    { taskId, projectId }
+  const actorIds = new Set(
+    [payload.updatedBy, payload.authorId, payload.invitedBy, payload.reporterId]
+      .filter(Boolean)
   );
 
-  const html = emailWrapper(`
-    <h2 style="color:#e2e8f0">Te asignaron una tarea 📋</h2>
-    <p><strong>${reporter?.name ?? 'Un compañero'}</strong> te asignó la tarea:</p>
-    <p style="background:#0f172a;padding:12px;border-radius:8px;font-size:16px">
-      <strong>${taskTitle}</strong>
-    </p>
-    <a href="${frontendUrl}" class="btn">Ver tarea →</a>
-  `);
-
-  await sendEmail(assignee.email, `[TaskFlow] Te asignaron: ${taskTitle}`, html);
+  return arrayUnique([...fromList, ...fallback]).filter((userId) => !actorIds.has(userId));
 }
 
-async function handleCommentCreated(payload) {
-  const { commentId, taskId, authorId, taskTitle = 'una tarea', taskOwnerId } = payload;
-  if (!taskOwnerId || taskOwnerId === authorId) return;
+function templateForEvent(type, payload, recipientName) {
+  const taskTitle = payload.taskTitle ?? 'una tarea';
+  const projectName = payload.projectName ?? 'tu proyecto';
+  const reportType = String(payload.reportType ?? '').toUpperCase() || 'REPORTE';
 
-  const [author, owner] = await Promise.all([
-    getUserById(authorId),
-    getUserById(taskOwnerId),
-  ]);
-  if (!owner) return;
+  if (type === 'TASK_CREATED') {
+    return {
+      notificationType: 'task_assigned',
+      title: 'Nueva actividad en tareas',
+      message: `Se creo o asigno la tarea "${taskTitle}".`,
+      subject: `[TaskFlow] Nueva tarea: ${taskTitle}`,
+      html: emailWrapper(`
+        <h2 style="color:#e2e8f0">Nueva actividad de tarea</h2>
+        <p>Hola <strong>${recipientName}</strong>, se registro una tarea nueva:</p>
+        <p style="background:#0f172a;padding:12px;border-radius:8px"><strong>${taskTitle}</strong></p>
+        <a href="${frontendUrl}" class="btn">Ver tarea</a>
+      `),
+    };
+  }
 
-  await saveNotification(
-    taskOwnerId,
-    'comment_added',
-    'Nuevo comentario en tu tarea',
-    `${author?.name ?? 'Alguien'} comentó en "${taskTitle}"`,
-    { commentId, taskId }
-  );
+  if (type === 'TASK_UPDATED') {
+    const deleted = payload.action === 'deleted';
+    return {
+      notificationType: 'task_updated',
+      title: deleted ? 'Tarea eliminada' : 'Tarea actualizada',
+      message: deleted
+        ? `Se elimino la tarea "${taskTitle}".`
+        : `Se actualizo la tarea "${taskTitle}".`,
+      subject: deleted
+        ? `[TaskFlow] Tarea eliminada: ${taskTitle}`
+        : `[TaskFlow] Tarea actualizada: ${taskTitle}`,
+      html: emailWrapper(`
+        <h2 style="color:#e2e8f0">${deleted ? 'Tarea eliminada' : 'Tarea actualizada'}</h2>
+        <p>Hola <strong>${recipientName}</strong>, hubo cambios en:</p>
+        <p style="background:#0f172a;padding:12px;border-radius:8px"><strong>${taskTitle}</strong></p>
+        <a href="${frontendUrl}" class="btn">Ver proyecto</a>
+      `),
+    };
+  }
 
-  const html = emailWrapper(`
-    <h2 style="color:#e2e8f0">Nuevo comentario 💬</h2>
-    <p><strong>${author?.name ?? 'Un compañero'}</strong> comentó en tu tarea:</p>
-    <p style="background:#0f172a;padding:12px;border-radius:8px"><strong>${taskTitle}</strong></p>
-    <a href="${frontendUrl}" class="btn">Ver comentario →</a>
-  `);
+  if (type === 'TASK_OVERDUE') {
+    return {
+      notificationType: 'task_overdue',
+      title: 'Tarea vencida',
+      message: `La tarea "${taskTitle}" esta vencida y requiere atencion.`,
+      subject: `[TaskFlow] Tarea vencida: ${taskTitle}`,
+      html: emailWrapper(`
+        <h2 style="color:#e2e8f0">Tarea vencida</h2>
+        <p>Hola <strong>${recipientName}</strong>, la tarea vencida es:</p>
+        <p style="background:#0f172a;padding:12px;border-radius:8px"><strong>${taskTitle}</strong></p>
+        <a href="${frontendUrl}" class="btn">Revisar tarea</a>
+      `),
+    };
+  }
 
-  await sendEmail(owner.email, `[TaskFlow] Comentario en: ${taskTitle}`, html);
+  if (type === 'COMMENT_CREATED') {
+    return {
+      notificationType: 'comment_added',
+      title: 'Nuevo comentario',
+      message: `Se agrego un comentario en "${taskTitle}".`,
+      subject: `[TaskFlow] Nuevo comentario en: ${taskTitle}`,
+      html: emailWrapper(`
+        <h2 style="color:#e2e8f0">Nuevo comentario</h2>
+        <p>Hola <strong>${recipientName}</strong>, se agrego un comentario en:</p>
+        <p style="background:#0f172a;padding:12px;border-radius:8px"><strong>${taskTitle}</strong></p>
+        <a href="${frontendUrl}" class="btn">Ver comentarios</a>
+      `),
+    };
+  }
+
+  if (type === 'REPORT_GENERATED') {
+    return {
+      notificationType: 'report_ready',
+      title: 'Reporte disponible',
+      message: `Se genero un reporte ${reportType} para "${projectName}".`,
+      subject: `[TaskFlow] Reporte ${reportType} disponible: ${projectName}`,
+      html: emailWrapper(`
+        <h2 style="color:#e2e8f0">Reporte disponible</h2>
+        <p>Hola <strong>${recipientName}</strong>, ya esta disponible un reporte ${reportType} del proyecto:</p>
+        <p style="background:#0f172a;padding:12px;border-radius:8px"><strong>${projectName}</strong></p>
+        <a href="${frontendUrl}" class="btn">Abrir reportes</a>
+      `),
+    };
+  }
+
+  if (type === 'INVITATION_SENT') {
+    return {
+      notificationType: 'project_invite',
+      title: `Invitacion al proyecto "${projectName}"`,
+      message: `Fuiste invitado a participar como ${payload.role ?? 'member'}.`,
+      subject: `[TaskFlow] Invitacion: ${projectName}`,
+      html: emailWrapper(`
+        <h2 style="color:#e2e8f0">Invitacion al proyecto</h2>
+        <p>Hola <strong>${recipientName}</strong>, fuiste invitado a:</p>
+        <p style="background:#0f172a;padding:12px;border-radius:8px"><strong>${projectName}</strong></p>
+        <a href="${frontendUrl}/projects/${payload.projectId}" class="btn">Abrir proyecto</a>
+      `),
+    };
+  }
+
+  if (type === 'ALERT_TRIGGERED') {
+    return {
+      notificationType: 'alert_triggered',
+      title: 'Alerta del proyecto',
+      message: String(payload.message ?? 'Se detecto una alerta en el proyecto.'),
+      subject: `[TaskFlow] Alerta: ${projectName}`,
+      html: emailWrapper(`
+        <h2 style="color:#e2e8f0">Alerta de proyecto</h2>
+        <p>Hola <strong>${recipientName}</strong>, se genero una alerta:</p>
+        <p style="background:#0f172a;padding:12px;border-radius:8px">${payload.message ?? 'Revisa tu proyecto para mas detalles.'}</p>
+        <a href="${frontendUrl}" class="btn">Ver alertas</a>
+      `),
+    };
+  }
+
+  return null;
 }
 
-async function handleInvitationSent(payload) {
-  const { projectId, projectName, invitedUserId, invitedEmail, invitedName, role, invitedBy, pending } = payload;
+async function handlePendingInvitation(payload) {
+  if (!payload.invitedEmail) return;
+  const inviter = await getUserById(payload.invitedBy);
+  const html = emailWrapper(`
+    <h2 style="color:#e2e8f0">Invitacion a TaskFlow Cloud</h2>
+    <p><strong>${inviter?.name ?? 'Un administrador'}</strong> te invito al proyecto:</p>
+    <p style="background:#0f172a;padding:12px;border-radius:8px"><strong>${payload.projectName}</strong></p>
+    <p>Crea tu cuenta con este email para unirte automaticamente.</p>
+    <a href="${frontendUrl}/register" class="btn">Crear cuenta</a>
+  `);
+  await sendEmail(payload.invitedEmail, `[TaskFlow] Te invitaron a "${payload.projectName}"`, html);
+}
 
-  const inviter = await getUserById(invitedBy);
+async function processEvent(sqsEvent) {
+  const { type, payload } = sqsEvent;
 
-  // Invitación a un email AÚN NO registrado: solo email con link de registro
-  // (no se crea notificación en DynamoDB porque todavía no existe el usuario).
-  if (pending || !invitedUserId) {
-    const html = emailWrapper(`
-      <h2 style="color:#e2e8f0">¡Te invitaron a TaskFlow Cloud! 🎉</h2>
-      <p><strong>${inviter?.name ?? 'Un administrador'}</strong> te invitó a colaborar como
-         <strong>${role}</strong> en el proyecto:</p>
-      <p style="background:#0f172a;padding:12px;border-radius:8px;font-size:18px">
-        📁 <strong>${projectName}</strong>
-      </p>
-      <p>Crea tu cuenta con este mismo email y entrarás automáticamente al proyecto.</p>
-      <a href="${frontendUrl}/register" class="btn">Crear cuenta →</a>
-    `);
-    await sendEmail(invitedEmail, `[TaskFlow] Te invitaron a "${projectName}"`, html);
+  if (type === 'INVITATION_SENT' && (payload.pending || !payload.invitedUserId)) {
+    await handlePendingInvitation(payload);
     return;
   }
 
-  await saveNotification(
-    invitedUserId,
-    'project_invite',
-    `Te invitaron al proyecto "${projectName}"`,
-    `${inviter?.name ?? 'Alguien'} te invitó como ${role} al proyecto "${projectName}"`,
-    { projectId }
-  );
+  const recipientIds = resolveRecipientIds(payload);
+  if (recipientIds.length === 0) return;
 
-  const html = emailWrapper(`
-    <h2 style="color:#e2e8f0">¡Invitación al proyecto! 🎉</h2>
-    <p>Hola <strong>${invitedName}</strong>,</p>
-    <p><strong>${inviter?.name ?? 'Un administrador'}</strong> te invitó a colaborar en:</p>
-    <p style="background:#0f172a;padding:12px;border-radius:8px;font-size:18px">
-      📁 <strong>${projectName}</strong>
-    </p>
-    <p>Tu rol: <strong>${role}</strong></p>
-    <a href="${frontendUrl}/projects/${projectId}" class="btn">Ir al proyecto →</a>
-  `);
+  const template = templateForEvent(type, payload, '{{name}}');
+  if (!template) return;
 
-  await sendEmail(invitedEmail, `[TaskFlow] Invitación: ${projectName}`, html);
+  for (const userId of recipientIds) {
+    const user = await getUserById(userId);
+    if (!user || !user.email) continue;
+
+    const personalized = templateForEvent(type, payload, user.name ?? 'colaborador');
+    if (!personalized) continue;
+
+    await saveNotification(
+      userId,
+      personalized.notificationType,
+      personalized.title,
+      personalized.message,
+      payload
+    );
+
+    await sendEmail(user.email, personalized.subject, personalized.html);
+  }
 }
 
 // ── Handler principal ──────────────────────────────────────────────────────
 
-// Tipos de evento que esta Lambda sabe manejar.
-const HANDLED_TYPES = new Set(['TASK_CREATED', 'COMMENT_CREATED', 'INVITATION_SENT']);
+const HANDLED_TYPES = new Set([
+  'TASK_CREATED',
+  'TASK_UPDATED',
+  'TASK_OVERDUE',
+  'COMMENT_CREATED',
+  'INVITATION_SENT',
+  'REPORT_GENERATED',
+  'ALERT_TRIGGERED',
+]);
 
 exports.handler = async (event) => {
   // Partial batch response: reportamos SOLO los mensajes que fallaron de forma
@@ -242,11 +323,7 @@ exports.handler = async (event) => {
 
     try {
       console.log('[notifications] Procesando evento:', type, JSON.stringify(payload));
-      switch (type) {
-        case 'TASK_CREATED':     await handleTaskCreated(payload); break;
-        case 'COMMENT_CREATED':  await handleCommentCreated(payload); break;
-        case 'INVITATION_SENT':  await handleInvitationSent(payload); break;
-      }
+      await processEvent(parsed);
     } catch (err) {
       // Fallo transitorio (SES caído, DynamoDB throttled, etc.): reportar para
       // que SQS reintente este mensaje y eventualmente lo lleve a la DLQ.

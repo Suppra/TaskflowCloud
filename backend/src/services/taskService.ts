@@ -1,10 +1,19 @@
 import { v4 as uuidv4 } from 'uuid';
 import { taskRepository } from '../repositories/taskRepository';
+import { projectRepository } from '../repositories/projectRepository';
 import { assignmentService } from './assignmentService';
 import { uploadService } from './uploadService';
 import { eventPublisher } from '../events/eventPublisher';
 import { Task, Subtask, Attachment } from '../types';
 import { CreateTaskInput, UpdateTaskInput } from '../validators/task';
+
+const getProjectRecipientIds = async (projectId: string, actorId?: string): Promise<string[]> => {
+  const project = await projectRepository.findById(projectId);
+  if (!project) return [];
+  return project.members
+    .map(m => m.userId)
+    .filter(userId => userId !== actorId);
+};
 
 export const taskService = {
   async create(
@@ -46,10 +55,19 @@ export const taskService = {
     };
 
     const created = await taskRepository.create(task);
+    const recipientUserIds = await getProjectRecipientIds(projectId, reporterId);
 
     await eventPublisher.publish({
       type: 'TASK_CREATED',
-      payload: { taskId: created.taskId, projectId, assigneeId, reporterId, autoAssigned },
+      payload: {
+        taskId: created.taskId,
+        taskTitle: created.title,
+        projectId,
+        assigneeId,
+        reporterId,
+        autoAssigned,
+        recipientUserIds,
+      },
       timestamp: now,
     });
 
@@ -70,7 +88,7 @@ export const taskService = {
   },
 
   async update(taskId: string, input: UpdateTaskInput, userId: string): Promise<Task> {
-    await this.findById(taskId); // verifica existencia
+    const currentTask = await this.findById(taskId); // verifica existencia
     const now = new Date().toISOString();
 
     const updates: Partial<Task> = { ...input, updatedAt: now };
@@ -83,9 +101,20 @@ export const taskService = {
     const updated = await taskRepository.update(taskId, updates);
     if (!updated) throw new Error('Error al actualizar tarea');
 
+    const recipientUserIds = await getProjectRecipientIds(updated.projectId, userId);
+
     await eventPublisher.publish({
       type: 'TASK_UPDATED',
-      payload: { taskId, updatedBy: userId, changes: input },
+      payload: {
+        taskId,
+        taskTitle: updated.title,
+        projectId: updated.projectId,
+        updatedBy: userId,
+        previousAssigneeId: currentTask.assigneeId,
+        assigneeId: updated.assigneeId,
+        changes: input,
+        recipientUserIds,
+      },
       timestamp: now,
     });
 
@@ -93,8 +122,21 @@ export const taskService = {
   },
 
   async delete(taskId: string): Promise<void> {
-    await this.findById(taskId);
+    const task = await this.findById(taskId);
     await taskRepository.delete(taskId);
+
+    const recipientUserIds = await getProjectRecipientIds(task.projectId);
+    await eventPublisher.publish({
+      type: 'TASK_UPDATED',
+      payload: {
+        action: 'deleted',
+        taskId,
+        taskTitle: task.title,
+        projectId: task.projectId,
+        recipientUserIds,
+      },
+      timestamp: new Date().toISOString(),
+    });
   },
 
   async addSubtask(taskId: string, title: string): Promise<Task> {

@@ -22,6 +22,7 @@ import { taskRepository } from '../repositories/taskRepository';
 import { boardService } from './boardService';
 import { projectService } from './projectService';
 import { userRepository } from '../repositories/userRepository';
+import { eventPublisher } from '../events/eventPublisher';
 import type { Task, Project } from '../types';
 import { Report } from '../types';
 import { logger } from '../config/logger';
@@ -592,7 +593,24 @@ export const reportService = {
     }
 
     const report: Report = { reportId, projectId, type, s3Key, generatedBy: requesterId, createdAt: ctx.generatedAt };
-    return reportRepository.create(report);
+    const createdReport = await reportRepository.create(report);
+
+    const recipientUserIds = ctx.project.members.map(member => member.userId);
+
+    await eventPublisher.publish({
+      type: 'REPORT_GENERATED',
+      payload: {
+        reportId,
+        projectId,
+        projectName: ctx.project.name,
+        reportType: type,
+        generatedBy: requesterId,
+        recipientUserIds,
+      },
+      timestamp: ctx.generatedAt,
+    });
+
+    return createdReport;
   },
 
   async getDownloadUrl(reportId: string, requesterId: string): Promise<string> {
