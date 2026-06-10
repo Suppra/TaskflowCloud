@@ -154,6 +154,38 @@ export const taskRepository = {
     return (result.Attributes as Task) ?? null;
   },
 
+  /**
+   * Anexa un elemento a un atributo de tipo lista (subtasks, attachments) de
+   * forma ATÓMICA usando `list_append` en el lado de DynamoDB.
+   *
+   * Esto evita el patrón read-modify-write (leer la lista completa, agregar en
+   * memoria y reescribirla), que sufre "lost updates" cuando dos peticiones
+   * concurrentes anexan a la misma tarea: la segunda escritura pisaría a la
+   * primera. `list_append` deja que DynamoDB haga la concatenación atómica.
+   *
+   * `if_not_exists` cubre el caso de un item antiguo sin el atributo inicializado.
+   */
+  async appendToList<T>(taskId: string, listAttr: 'subtasks' | 'attachments', element: T): Promise<Task | null> {
+    const now = new Date().toISOString();
+    const result = await dynamoDB.send(
+      new UpdateCommand({
+        TableName: TABLE,
+        Key: { taskId },
+        UpdateExpression:
+          'SET #list = list_append(if_not_exists(#list, :empty), :el), updatedAt = :now',
+        ConditionExpression: 'attribute_exists(taskId)', // la tarea debe existir
+        ExpressionAttributeNames: { '#list': listAttr },
+        ExpressionAttributeValues: {
+          ':el':    [element],
+          ':empty': [],
+          ':now':   now,
+        },
+        ReturnValues: 'ALL_NEW',
+      })
+    );
+    return (result.Attributes as Task) ?? null;
+  },
+
   async delete(taskId: string): Promise<void> {
     await dynamoDB.send(new DeleteCommand({ TableName: TABLE, Key: { taskId } }));
   },

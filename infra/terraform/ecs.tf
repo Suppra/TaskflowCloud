@@ -53,15 +53,19 @@ resource "aws_ecs_task_definition" "backend" {
       { name = "MAX_TASKS_PER_MEMBER", value = tostring(var.max_tasks_per_member) },
       { name = "FRONTEND_URL", value = var.domain_name != "" ? "https://${var.domain_name}" : "http://localhost:5173" },
       { name = "CORS_ORIGINS", value = var.domain_name != "" ? "https://${var.domain_name}" : "http://localhost:5173" },
-      # IA (Groq / LLaMA 3.3, gratis) — vacío deshabilita la feature sin romper el servidor
-      { name = "GROQ_API_KEY", value = var.groq_api_key },
     ]
 
-    # Secretos inyectados desde Secrets Manager (nunca en texto plano)
-    secrets = [
-      { name = "JWT_SECRET", valueFrom = "${aws_secretsmanager_secret.jwt.arn}:JWT_SECRET::" },
-      { name = "JWT_REFRESH_SECRET", valueFrom = "${aws_secretsmanager_secret.jwt.arn}:JWT_REFRESH_SECRET::" },
-    ]
+    # Secretos inyectados desde Secrets Manager (nunca en texto plano).
+    # GROQ_API_KEY se añade solo si se configuró la clave (la IA queda desactivada si no).
+    secrets = concat(
+      [
+        { name = "JWT_SECRET", valueFrom = "${aws_secretsmanager_secret.jwt.arn}:JWT_SECRET::" },
+        { name = "JWT_REFRESH_SECRET", valueFrom = "${aws_secretsmanager_secret.jwt.arn}:JWT_REFRESH_SECRET::" },
+      ],
+      var.groq_api_key != "" ? [
+        { name = "GROQ_API_KEY", valueFrom = "${aws_secretsmanager_secret.groq[0].arn}:GROQ_API_KEY::" },
+      ] : []
+    )
 
     logConfiguration = {
       logDriver = "awslogs"

@@ -114,3 +114,9 @@ variable "groq_api_key" {
   default     = ""
   sensitive   = true
 }
+
+variable "alerts_email" {
+  description = "Email que recibe las alarmas operativas de CloudWatch (DLQ, 5xx). Vacío = sin suscripción (las alarmas siguen registrándose, pero sin notificación)."
+  type        = string
+  default     = ""
+}

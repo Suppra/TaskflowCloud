@@ -30,10 +30,29 @@ data "archive_file" "alerts_engine" {
   output_path = "${path.module}/.build/alerts-engine.zip"
 }
 
+# scheduled-reports depende de `pdfkit`, que NO viene en el runtime de Lambda.
+# Este null_resource instala las dependencias de producción ANTES de empaquetar.
+# Se re-ejecuta cuando cambia package.json o el código de la Lambda.
+resource "null_resource" "scheduled_reports_deps" {
+  triggers = {
+    package_json = filemd5("${local.repo_root}/lambdas/scheduled-reports/package.json")
+    index_js     = filemd5("${local.repo_root}/lambdas/scheduled-reports/index.js")
+  }
+
+  provisioner "local-exec" {
+    working_dir = "${local.repo_root}/lambdas/scheduled-reports"
+    command     = "npm install --omit=dev --no-audit --no-fund"
+  }
+}
+
 data "archive_file" "scheduled_reports" {
   type        = "zip"
   source_dir  = "${local.repo_root}/lambdas/scheduled-reports"
   output_path = "${path.module}/.build/scheduled-reports.zip"
+
+  # Fuerza a que el zip se cree DESPUÉS de instalar node_modules,
+  # de modo que pdfkit quede incluido en el artefacto.
+  depends_on = [null_resource.scheduled_reports_deps]
 }
 
 locals {

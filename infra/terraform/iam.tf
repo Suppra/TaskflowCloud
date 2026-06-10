@@ -24,14 +24,18 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_managed" {
 }
 
 resource "aws_iam_role_policy" "ecs_execution_secrets" {
-  name = "read-jwt-secret"
+  name = "read-app-secrets"
   role = aws_iam_role.ecs_execution.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["secretsmanager:GetSecretValue"]
-      Resource = [aws_secretsmanager_secret.jwt.arn]
+      Effect = "Allow"
+      Action = ["secretsmanager:GetSecretValue"]
+      # JWT siempre; Groq solo si se creó el secreto
+      Resource = concat(
+        [aws_secretsmanager_secret.jwt.arn],
+        var.groq_api_key != "" ? [aws_secretsmanager_secret.groq[0].arn] : []
+      )
     }]
   })
 }

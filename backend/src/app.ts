@@ -14,6 +14,13 @@ import router from './routes';
 
 const app = express();
 
+// ── Proxy ──────────────────────────────────────────────────
+// Detrás del ALB (un único proxy de confianza). Sin esto, express-rate-limit
+// y req.ip ven la IP del balanceador → toda la base de usuarios compartiría el
+// mismo cubo de rate limit (auto-DoS). Confiar solo en 1 salto evita spoofing
+// de X-Forwarded-For desde el cliente.
+app.set('trust proxy', 1);
+
 // ── Seguridad ──────────────────────────────────────────────
 app.use(helmet());
 app.use(
@@ -25,11 +32,13 @@ app.use(
   })
 );
 
-// Rate limit global
+// Rate limit global — keyed por IP real del cliente (gracias a 'trust proxy').
+// 600/15min cubre una SPA con polling (dashboard, notificaciones) sin throttlear
+// a un usuario activo legítimo; el límite anti-brute-force de /auth sigue estricto.
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 200,
+    max: 600,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, error: 'Demasiadas solicitudes, intenta más tarde' },

@@ -98,17 +98,15 @@ export const taskService = {
   },
 
   async addSubtask(taskId: string, title: string): Promise<Task> {
-    const task = await this.findById(taskId);
+    await this.findById(taskId); // valida existencia (lanza 404 si no)
     const subtask: Subtask = {
       subtaskId: uuidv4(),
       title,
       completed: false,
       createdAt: new Date().toISOString(),
     };
-    const updated = await taskRepository.update(taskId, {
-      subtasks: [...task.subtasks, subtask],
-      updatedAt: new Date().toISOString(),
-    });
+    // Append ATÓMICO (list_append) — evita lost-update con concurrencia.
+    const updated = await taskRepository.appendToList(taskId, 'subtasks', subtask);
     return updated!;
   },
 
@@ -134,7 +132,7 @@ export const taskService = {
     data: { filename: string; s3Key: string; fileSize: number; mimeType: string },
     uploadedBy: string
   ): Promise<Task> {
-    const task = await this.findById(taskId);
+    await this.findById(taskId); // valida existencia (lanza 404 si no)
     const attachment: Attachment = {
       attachmentId: uuidv4(),
       filename: data.filename,
@@ -144,10 +142,8 @@ export const taskService = {
       uploadedBy,
       uploadedAt: new Date().toISOString(),
     };
-    const updated = await taskRepository.update(taskId, {
-      attachments: [...(task.attachments ?? []), attachment],
-      updatedAt: new Date().toISOString(),
-    });
+    // Append ATÓMICO (list_append) — evita lost-update con concurrencia.
+    const updated = await taskRepository.appendToList(taskId, 'attachments', attachment);
     return updated!;
   },
 

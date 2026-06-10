@@ -189,37 +189,48 @@ async function handleInvitationSent(payload) {
 
 // ── Handler principal ──────────────────────────────────────────────────────
 
+// Tipos de evento que esta Lambda sabe manejar.
+const HANDLED_TYPES = new Set(['TASK_CREATED', 'COMMENT_CREATED', 'INVITATION_SENT']);
+
 exports.handler = async (event) => {
-  const results = [];
+  // Partial batch response: reportamos SOLO los mensajes que fallaron de forma
+  // transitoria para que SQS los reintente y, tras maxReceiveCount, los envíe a
+  // la DLQ. Los errores de datos (JSON inválido / tipo desconocido) se descartan
+  // a propósito porque reintentarlos nunca tendría éxito (poison messages).
+  const batchItemFailures = [];
 
   for (const record of event.Records) {
+    let parsed;
     try {
-      const sqsEvent = JSON.parse(record.body);
-      const { type, payload } = sqsEvent;
-
-      console.log('[notifications] Processing event:', type, JSON.stringify(payload));
-
-      switch (type) {
-        case 'TASK_CREATED':
-          await handleTaskCreated(payload);
-          break;
-        case 'COMMENT_CREATED':
-          await handleCommentCreated(payload);
-          break;
-        case 'INVITATION_SENT':
-          await handleInvitationSent(payload);
-          break;
-        default:
-          console.log('[notifications] Event type not handled:', type);
-      }
-
-      results.push({ messageId: record.messageId, status: 'ok' });
+      parsed = JSON.parse(record.body);
     } catch (err) {
-      console.error('[notifications] Error processing record:', record.messageId, err);
-      // No lanzar — evita que SQS reintente mensajes válidos que fallaron por datos incorrectos
-      results.push({ messageId: record.messageId, status: 'error', error: err.message });
+      // Mensaje corrupto: descartar (no reintentar) para no envenenar la cola.
+      console.error('[notifications] Mensaje no parseable, descartado:', record.messageId, err.message);
+      continue;
+    }
+
+    const { type, payload } = parsed;
+
+    // Tipo no manejado: no es un fallo, simplemente se ignora.
+    if (!HANDLED_TYPES.has(type)) {
+      console.log('[notifications] Tipo no manejado, ignorado:', type);
+      continue;
+    }
+
+    try {
+      console.log('[notifications] Procesando evento:', type, JSON.stringify(payload));
+      switch (type) {
+        case 'TASK_CREATED':     await handleTaskCreated(payload); break;
+        case 'COMMENT_CREATED':  await handleCommentCreated(payload); break;
+        case 'INVITATION_SENT':  await handleInvitationSent(payload); break;
+      }
+    } catch (err) {
+      // Fallo transitorio (SES caído, DynamoDB throttled, etc.): reportar para
+      // que SQS reintente este mensaje y eventualmente lo lleve a la DLQ.
+      console.error('[notifications] Fallo transitorio, se reintentará:', record.messageId, err.message);
+      batchItemFailures.push({ itemIdentifier: record.messageId });
     }
   }
 
-  return { batchItemFailures: [] };
+  return { batchItemFailures };
 };

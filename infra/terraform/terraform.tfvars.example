@@ -15,6 +15,16 @@ backend_desired_count = 2
 ses_from_email       = "noreply@taskflow.dev"
 max_tasks_per_member = 8
 
+# ── IA (opcional) ────────────────────────────────────────────────────────────
+# Clave de Groq para la generación de tareas con IA. Se guarda en Secrets Manager.
+# Vacío = feature de IA desactivada. Consíguela gratis en https://console.groq.com
+groq_api_key = ""
+
+# ── Observabilidad ───────────────────────────────────────────────────────────
+# Email que recibe las alarmas operativas (DLQ con eventos, 5xx en el ALB).
+# Vacío = las alarmas se registran pero sin notificación por email.
+alerts_email = ""
+
 # ── DNS / dominio (opcional) ─────────────────────────────────────────────────
 # Para usar dominio propio + HTTPS, crea primero la zona en Route53 y pon:
 # domain_name    = "taskflow.dev"

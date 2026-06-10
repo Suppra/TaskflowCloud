@@ -16,6 +16,7 @@ import type { Server as HttpServer } from 'http';
 import { verify } from 'jsonwebtoken';
 import { env } from './env';
 import { logger } from './logger';
+import { projectService } from '../services/projectService';
 
 let _io: Server | null = null;
 
@@ -49,10 +50,19 @@ export function initSocket(httpServer: HttpServer): Server {
   _io.on('connection', (socket) => {
     logger.info({ message: 'Socket conectado', userId: socket.data.userId, id: socket.id });
 
-    // El cliente se une a la room de un proyecto al abrir un tablero
-    socket.on('join:project', (projectId: string) => {
-      socket.join(`project:${projectId}`);
-      logger.info({ message: 'Socket unido a proyecto', userId: socket.data.userId, projectId });
+    // El cliente se une a la room de un proyecto al abrir un tablero.
+    // AUTORIZACIÓN: solo se permite unirse si el usuario es miembro del proyecto.
+    // Sin esto, cualquier usuario autenticado podría escuchar eventos en tiempo
+    // real de proyectos ajenos (IDOR sobre el canal WebSocket).
+    socket.on('join:project', async (projectId: string) => {
+      try {
+        await projectService.assertMember(projectId, socket.data.userId);
+        socket.join(`project:${projectId}`);
+        logger.info({ message: 'Socket unido a proyecto', userId: socket.data.userId, projectId });
+      } catch {
+        logger.warn({ message: 'Socket rechazado en join:project (no miembro)', userId: socket.data.userId, projectId });
+        socket.emit('error', { message: 'No autorizado para este proyecto' });
+      }
     });
 
     // El cliente sale de la room al cerrar el tablero
