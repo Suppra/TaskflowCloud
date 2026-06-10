@@ -63,14 +63,14 @@ app.use(
 // usa el comportamiento por defecto que ya normaliza IPv4/IPv6.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10, // 10 intentos por IP cada 15 minutos
+  max: 30, // 30 intentos por IP cada 15 minutos
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: true,
   message: { success: false, error: 'Demasiados intentos de autenticación, espera 15 minutos' },
 });
 
 app.use('/api/v1/auth/login', authLimiter);
-app.use('/api/v1/auth/register', authLimiter);
 app.use('/api/v1/auth/refresh', authLimiter);
 
 // ── Body parsing ───────────────────────────────────────────
